@@ -36,9 +36,9 @@ jobs:
       run:
         working-directory: driver
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: driver/go.mod
           cache-dependency-path: driver/go.sum
@@ -57,7 +57,7 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o "dist/${out}" .
           ls -la dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: driver-${{ matrix.goos }}-${{ matrix.goarch }}
           path: driver/dist/docker-machine-driver-fusioncompute_*
@@ -70,9 +70,9 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -97,7 +97,7 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           find stage -type f | sort
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ui-bundle
           path: ui/fusioncompute-ui-*.tar.gz
@@ -108,7 +108,7 @@ jobs:
     needs: [ driver, ui ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -123,7 +123,7 @@ jobs:
           echo "=== release assets ==="
           ls -la release
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release/*
           generate_release_notes: true
@@ -137,7 +137,7 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Download UI bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ui-bundle
           path: ui-bundle
@@ -150,11 +150,11 @@ jobs:
           echo "=== site ==="
           find _site -type f | sort
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
