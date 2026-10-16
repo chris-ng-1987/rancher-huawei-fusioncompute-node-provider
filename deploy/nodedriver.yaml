@@ -20,7 +20,7 @@ metadata:
     privateCredentialFields: dcsPassword
     optionalCredentialFields: dcsPort,dcsSiteUri
     passwordFields: dcsPassword,sshPassword
-    defaults: dcsPort:7443,cpu:2,memoryMb:4096,diskGb:250,sshUser:root,networkMode:dhcp
+    defaults: dcsPort:7443,cpu:2,memoryMb:4096,diskGb:250,sshUser:root
 spec:
   displayName: FusionCompute
   active: true

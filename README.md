@@ -309,7 +309,6 @@ docker-machine create -d fusioncompute \
   --fusioncompute-port-group-urn="urn:sites:1:dvswitchs:1:portgroups:1" \
   --fusioncompute-datastore-urn="urn:sites:1:datastores:1" \
   --fusioncompute-location="urn:sites:1:clusters:1" \
-  --fusioncompute-network-mode=dhcp \
   --fusioncompute-generate-password=true \
   --fusioncompute-ssh-user=root \
   my-node-01
@@ -362,12 +361,6 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-datastore-urn`       | `FUSIONCOMPUTE_DATASTORE_URN` | yes      | Destination datastore URN                    |
 | `--fusioncompute-location`            | `FUSIONCOMPUTE_LOCATION`      | no       | FusionCompute location (cluster) URN         |
 | `--fusioncompute-vm-description`      | `FUSIONCOMPUTE_VM_DESCRIPTION`| no       | Description string for the new VM            |
-| `--fusioncompute-network-mode`        | `FUSIONCOMPUTE_NETWORK_MODE`  | no       | Guest NIC mode: `dhcp` (required — a node pool needs one address per VM) |
-| `--fusioncompute-vm-ip`               | `FUSIONCOMPUTE_VM_IP`         | no       | Static IPv4 (static mode only; static is currently disabled) |
-| `--fusioncompute-vm-netmask`          | `FUSIONCOMPUTE_VM_NETMASK`    | no       | Subnet mask (static mode only)               |
-| `--fusioncompute-vm-gateway`          | `FUSIONCOMPUTE_VM_GATEWAY`    | no       | Default gateway (static mode only)           |
-| `--fusioncompute-dns1`                | `FUSIONCOMPUTE_DNS1`          | no       | Primary DNS (static mode only)               |
-| `--fusioncompute-dns2`                | `FUSIONCOMPUTE_DNS2`          | no       | Secondary DNS (static mode only)             |
 | `--fusioncompute-ssh-user`            | `FUSIONCOMPUTE_SSH_USER`      | no       | OS user docker-machine SSHes in as (default `root`) |
 | `--fusioncompute-ssh-key-path`        | `FUSIONCOMPUTE_SSH_KEY_PATH`  | no       | Private key used for SSH (libmachine only supports key auth) |
 | `--fusioncompute-ssh-password`        | `FUSIONCOMPUTE_SSH_PASSWORD`  | no       | Guest password: the template's existing credential, or the new one to reset with `--fusioncompute-set-vm-password` |
@@ -387,8 +380,6 @@ Every flag also accepts an environment variable (see the table below).
   skip verification — see [live dropdowns](#3-live-dropdowns).
 - The driver assumes FusionCompute API version `v8.1`. Adjust `fcAPIVersion` in
   `driver/client.go` for other versions.
-- Static IP addressing is present in the driver but disabled in the UI/defaults; DHCP is
-  the supported mode for node pools.
 
 ---
 

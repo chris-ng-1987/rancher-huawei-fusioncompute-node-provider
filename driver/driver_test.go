@@ -22,11 +22,6 @@ func TestBuildCloneSpec(t *testing.T) {
 		DiskGB:        100,
 		PortGroupURN:  "urn:test:pg",
 		DatastoreURN:  "urn:test:ds",
-		VMIP:          "10.1.2.3",
-		VMNetmask:     "255.255.255.0",
-		VMGateway:     "10.1.2.1",
-		DNS1:          "8.8.8.8",
-		DNS2:          "1.1.1.1",
 	}
 
 	spec := d.buildCloneSpec()
@@ -100,30 +95,23 @@ func TestBuildCloneSpec(t *testing.T) {
 		t.Fatalf("expected 1 nicSpecification, got %d", len(spec.VMCustomization.NICSpecification))
 	}
 	ns := spec.VMCustomization.NICSpecification[0]
-	if ns.IP != "10.1.2.3" || ns.Netmask != "255.255.255.0" || ns.Gateway != "10.1.2.1" {
-		t.Errorf("unexpected NIC spec: %+v", ns)
-	}
-	if ns.SetDNS != "8.8.8.8" || ns.AddDNS != "1.1.1.1" {
-		t.Errorf("unexpected DNS: set=%q add=%q", ns.SetDNS, ns.AddDNS)
+	if ns.IPVersion != 4 || ns.SequenceNum != 1 {
+		t.Errorf("NIC spec must be {ipVersion:4, sequenceNum:1}, got %+v", ns)
 	}
 }
 
-// TestBuildCloneSpecDHCP verifies that --fusioncompute-network-mode=dhcp
-// produces a single bare nicSpecification entry `{ipVersion:4, sequenceNum:1}`.
-// FC rejects an empty/absent nicSpecification on this build, so DHCP must
-// still send one entry with the address fields omitted rather than `[]`.
+// TestBuildCloneSpecDHCP verifies the clone spec always produces a single
+// bare nicSpecification entry `{ipVersion:4, sequenceNum:1}` so the guest
+// obtains its address via DHCP. FC rejects an empty/absent nicSpecification
+// on this build, so DHCP must still send one entry rather than `[]`.
 func TestBuildCloneSpecDHCP(t *testing.T) {
 	d := &Driver{
 		VMName:       "dhcp-vm-01",
-		NetworkMode:  NetworkModeDHCP,
 		CPUCount:     2,
 		MemoryMB:     4096,
 		DiskGB:       100,
 		PortGroupURN: "urn:test:pg",
 		DatastoreURN: "urn:test:ds",
-		// Static fields deliberately set to prove they are ignored.
-		VMIP: "10.1.2.3", VMNetmask: "255.255.255.0", VMGateway: "10.1.2.1",
-		DNS1: "8.8.8.8", DNS2: "1.1.1.1",
 	}
 
 	spec := d.buildCloneSpec()
@@ -134,9 +122,6 @@ func TestBuildCloneSpecDHCP(t *testing.T) {
 	ns := spec.VMCustomization.NICSpecification[0]
 	if ns.IPVersion != 4 || ns.SequenceNum != 1 {
 		t.Errorf("DHCP NIC spec must be {ipVersion:4, sequenceNum:1}, got %+v", ns)
-	}
-	if ns.IP != "" || ns.Netmask != "" || ns.Gateway != "" || ns.SetDNS != "" || ns.AddDNS != "" {
-		t.Errorf("DHCP NIC spec must omit address/DNS fields, got %+v", ns)
 	}
 
 	buf, err := json.Marshal(spec)
@@ -153,33 +138,6 @@ func TestBuildCloneSpecDHCP(t *testing.T) {
 	}
 	if strings.Contains(s, `"nicSpecification":[]`) {
 		t.Errorf(`DHCP payload must not send an empty "nicSpecification":[], got: %s`, s)
-	}
-	if strings.Contains(s, `"ip":"10.1.2.3"`) {
-		t.Errorf("DHCP payload must not carry the static IP, got: %s", s)
-	}
-}
-
-// TestPreferredGuestIP verifies the SSH address source: static mode trusts
-// --fusioncompute-vm-ip, while DHCP mode returns "" even when a stale static
-// VMIP is still present, forcing discovery from the VM spec (GET {vmURI}).
-func TestPreferredGuestIP(t *testing.T) {
-	cases := []struct {
-		name        string
-		networkMode string
-		vmip        string
-		want        string
-	}{
-		{"static uses requested IP", NetworkModeStatic, "10.1.2.3", "10.1.2.3"},
-		{"legacy empty mode behaves as static", "", "10.1.2.3", "10.1.2.3"},
-		{"dhcp ignores lingering static IP", NetworkModeDHCP, "10.1.2.3", ""},
-		{"dhcp with no static IP", NetworkModeDHCP, "", ""},
-		{"static with no IP falls back to discovery", NetworkModeStatic, "", ""},
-	}
-	for _, c := range cases {
-		d := &Driver{NetworkMode: c.networkMode, VMIP: c.vmip}
-		if got := d.preferredGuestIP(); got != c.want {
-			t.Errorf("%s: preferredGuestIP()=%q, want %q", c.name, got, c.want)
-		}
 	}
 }
 
@@ -261,9 +219,6 @@ func TestValidate(t *testing.T) {
 	d.TemplateID = "tpl"
 	d.PortGroupURN = "urn:pg"
 	d.DatastoreURN = "urn:ds"
-	d.VMIP = "10.0.0.1"
-	d.VMNetmask = "255.255.255.0"
-	d.VMGateway = "10.0.0.254"
 	if err := d.validate(); err != nil {
 		t.Fatalf("expected validation to pass with required fields set, got %v", err)
 	}
@@ -284,8 +239,6 @@ func TestBuildCloneSpecJSONShape(t *testing.T) {
 		Location:      "urn:loc",
 		CPUCount:      2, MemoryMB: 4096, DiskGB: 100,
 		PortGroupURN: "urn:pg", DatastoreURN: "urn:ds",
-		VMIP: "10.1.2.3", VMNetmask: "255.255.255.0", VMGateway: "10.1.2.1",
-		DNS1: "8.8.8.8", DNS2: "1.1.1.1",
 	}
 	buf, err := json.Marshal(d.buildCloneSpec())
 	if err != nil {
@@ -329,12 +282,7 @@ func TestBuildCloneSpecJSONShape(t *testing.T) {
 		`"updatePassword":false`,
 		`"vmcustomizationId":null`, // null, not ""
 		`"isUpdateVmPassword":false`,
-		`"ipVersion":4`,
-		`"ip":"10.1.2.3"`,
-		`"netmask":"255.255.255.0"`,
-		`"gateway":"10.1.2.1"`,
-		`"setdns":"8.8.8.8"`,
-		`"adddns":"1.1.1.1"`,
+		`"nicSpecification":[{"ipVersion":4,"sequenceNum":1}]`,
 		`"hostname":"test-vm-01"`,
 		`"password":""`, // reference body always sends this; empty when no reset is requested
 	} {
@@ -376,7 +324,6 @@ func TestBuildCloneSpecLocationOmitted(t *testing.T) {
 		// Location intentionally empty.
 		CPUCount: 2, MemoryMB: 4096, DiskGB: 100,
 		PortGroupURN: "urn:pg", DatastoreURN: "urn:ds",
-		VMIP: "10.1.2.3", VMNetmask: "255.255.255.0", VMGateway: "10.1.2.1",
 	}
 	buf, err := json.Marshal(d.buildCloneSpec())
 	if err != nil {
@@ -405,7 +352,6 @@ func TestBuildCloneSpecVMNameFallback(t *testing.T) {
 		// VMName deliberately empty.
 		CPUCount: 2, MemoryMB: 4096, DiskGB: 100,
 		PortGroupURN: "urn:pg", DatastoreURN: "urn:ds",
-		VMIP: "10.1.2.3", VMNetmask: "255.255.255.0", VMGateway: "10.1.2.1",
 	}
 	spec := d.buildCloneSpec()
 	if spec.Name != "test-docker-machine" {

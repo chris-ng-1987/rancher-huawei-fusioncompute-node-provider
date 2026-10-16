@@ -33,15 +33,8 @@ datastoreUrn: urn:sites:1:datastores:1
 location: urn:sites:1:clusters:1
 portGroupUrn: urn:sites:1:dvswitchs:1:portgroups:1
 
-# --- Networking: DHCP only (each node in a pool needs its own address).
-# Static addressing is disabled in the node driver; uncomment the fields
-# below together with the matching UI/driver template blocks to re-enable.
-networkMode: dhcp
-# dns1: 192.0.2.53
-# dns2: 198.51.100.53
-# vmIp: 192.0.2.10
-# vmNetmask: 255.255.255.0
-# vmGateway: 192.0.2.1
+# --- Networking: the guest NIC always uses DHCP, so each node in a pool
+# gets its own address.
 
 # --- Access ---
 # With setVmPassword=false the SSH user and the template's existing password

@@ -232,25 +232,13 @@ type CloneSpec struct {
 
 // NICSpecification is a single entry in vmCustomization.nicSpecification.
 //
-//   - static: a fully populated entry asks FusionCompute to stamp the
-//     requested address/gateway/DNS onto the cloned guest.
-//   - dhcp: a bare `{ipVersion:4, sequenceNum:1}` entry (address fields
-//     omitted) tells FusionCompute to let the guest obtain its address at
-//     boot. FC rejects an empty/absent nicSpecification on this build, so
-//     DHCP must still send exactly one minimal entry.
-//
-// The address/DNS fields are omitempty so the DHCP entry marshals to
-// `{"ipVersion":4,"sequenceNum":1}`. ipVersion and sequenceNum are always
-// emitted (sequenceNum is a meaningful 0 in the static case, so it must
-// not be omitted there).
+// The driver always uses DHCP: a bare `{ipVersion:4, sequenceNum:1}` entry
+// tells FusionCompute to let the guest obtain its address at boot. FC rejects
+// an empty/absent nicSpecification on this build, so exactly one minimal entry
+// is always sent.
 type NICSpecification struct {
-	IPVersion   int    `json:"ipVersion"`
-	IP          string `json:"ip,omitempty"`
-	Netmask     string `json:"netmask,omitempty"`
-	Gateway     string `json:"gateway,omitempty"`
-	SequenceNum int    `json:"sequenceNum"`
-	SetDNS      string `json:"setdns,omitempty"`
-	AddDNS      string `json:"adddns,omitempty"`
+	IPVersion   int `json:"ipVersion"`
+	SequenceNum int `json:"sequenceNum"`
 }
 
 // newClient builds an http.Client that skips TLS verification — matching

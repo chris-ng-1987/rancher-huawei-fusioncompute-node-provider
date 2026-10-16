@@ -158,8 +158,9 @@ func (d *Driver) alignResetSSHUser() {
 //  4. poll the returned task URI until progress==100 & status==success
 //  5. capture the VM URN so later operations can find the host
 //
-// On success, GetIP() returns the static IP we requested and docker-machine
-// can SSH in using the SSH key supplied via --fusioncompute-ssh-key-path
+// On success, GetIP() returns the guest IP discovered from FusionCompute and
+// docker-machine can SSH in using the SSH key supplied via
+// --fusioncompute-ssh-key-path
 // (or the standard docker-machine --ssh-key-path / MACHINE_SSH_KEY_PATH).
 // Password auth is not supported by libmachine v0.16.x; if the template
 // does not contain a public key, pass --fusioncompute-ssh-password with
@@ -242,21 +243,14 @@ func (d *Driver) Create() (err error) {
 		}()
 	}
 
-	// Resolve the guest IP docker-machine will SSH to.
-	//   - static mode: the requested --fusioncompute-vm-ip is authoritative.
-	//   - dhcp mode: the clone task does NOT report the address the guest
-	//     picks up at boot, so read it from the VM's spec (GET {vmURI}) and
-	//     poll until the guest has one. We deliberately ignore any VMIP that
-	//     may still linger in the saved config so a DHCP VM never inherits a
-	//     stale static address.
-	d.IPAddr = d.preferredGuestIP()
-	if d.IPAddr == "" {
-		ip, err := d.waitForGuestIP(c, 40, 15*time.Second)
-		if err != nil {
-			return err
-		}
-		d.IPAddr = ip
+	// Resolve the guest IP docker-machine will SSH to. The clone task does
+	// not report the address the guest picks up at boot, so read it from the
+	// VM's spec (GET {vmURI}) and poll until the guest has one.
+	ip, err := d.waitForGuestIP(c, 40, 15*time.Second)
+	if err != nil {
+		return err
 	}
+	d.IPAddr = ip
 	log.Infof("FusionCompute: VM %s provisioned at %s", d.VMMoRef, d.IPAddr)
 	if err := d.waitForSSH(5*time.Minute, 5*time.Second); err != nil {
 		return err
@@ -281,23 +275,10 @@ func (d *Driver) ensureSSHKey() error {
 	return ssh.GenerateSSHKey(path)
 }
 
-// preferredGuestIP returns the IP to use without querying the VM spec:
-// static mode uses the requested --fusioncompute-vm-ip, while DHCP mode
-// returns "" so the caller falls back to discovering the address from the
-// VM's spec. Returning "" for DHCP also means a stale static VMIP left in a
-// saved config can never be mistaken for the DHCP-assigned address.
-func (d *Driver) preferredGuestIP() string {
-	if d.networkModeIsDHCP() {
-		return ""
-	}
-	return d.VMIP
-}
-
 // waitForGuestIP polls the cloned VM's spec (GET {vmURI}) until
-// FusionCompute reports a guest IP. This is the address source for DHCP:
-// the clone/provision task only tracks the clone itself and does not reflect
-// the address the guest obtains on boot, so the IP is read from
-// vmConfig.nics[0].ip (see VM.GuestIP).
+// FusionCompute reports a guest IP. The clone/provision task only tracks the
+// clone itself and does not reflect the address the guest obtains on boot, so
+// the IP is read from vmConfig.nics[0].ip (see VM.GuestIP).
 func (d *Driver) waitForGuestIP(c *fcClient, attempts int, interval time.Duration) (string, error) {
 	var last error
 	for i := 0; i < attempts; i++ {
@@ -460,28 +441,13 @@ func (d *Driver) buildCloneSpec() *CloneSpec {
 	spec.VMCustomization.Password = d.SSHPassword
 	spec.VMCustomization.IsUpdateVMPassword = d.SetVMPassword
 
-	// NIC addressing. Static mode stamps the requested address; DHCP
-	// mode sends a bare `{ipVersion,sequenceNum}` entry so the guest
-	// obtains its address at boot. The slice must be non-empty in both
-	// cases: FC rejects an empty/absent nicSpecification on this build,
-	// so DHCP is expressed by a single entry with the address fields
-	// omitted (see NICSpecification's omitempty tags).
-	if d.networkModeIsDHCP() {
-		spec.VMCustomization.NICSpecification = []NICSpecification{{
-			IPVersion:   4,
-			SequenceNum: 1,
-		}}
-	} else {
-		spec.VMCustomization.NICSpecification = []NICSpecification{{
-			IPVersion:   4,
-			IP:          d.VMIP,
-			Netmask:     d.VMNetmask,
-			Gateway:     d.VMGateway,
-			SequenceNum: 0,
-			SetDNS:      d.DNS1,
-			AddDNS:      d.DNS2,
-		}}
-	}
+	// NIC addressing: DHCP. Send a bare `{ipVersion,sequenceNum}` entry so
+	// the guest obtains its address at boot. The slice must be non-empty:
+	// FC rejects an empty/absent nicSpecification on this build.
+	spec.VMCustomization.NICSpecification = []NICSpecification{{
+		IPVersion:   4,
+		SequenceNum: 1,
+	}}
 
 	return spec
 }

@@ -31,8 +31,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import FusionCompute from '../fusioncompute.js';
 
 // Fields rendered with our own widgets, so Questions must skip them. The
-// static IP / DNS fields are grouped under the IP Mode selector, and the
-// access/password fields under the Access section.
+// access/password fields are grouped under the Access section.
 const OVERRIDDEN_FIELDS = [
   'cpu',
   'memoryMb',
@@ -41,12 +40,6 @@ const OVERRIDDEN_FIELDS = [
   'datastoreUrn',
   'location',
   'portGroupUrn',
-  'networkMode',
-  'vmIp',
-  'vmNetmask',
-  'vmGateway',
-  'dns1',
-  'dns2',
   'setVmPassword',
   'generatePassword',
   'sshPassword',
@@ -58,14 +51,6 @@ const OVERRIDDEN_FIELDS = [
 // key path (Rancher must not override it), so hide both even if the cached
 // schema still advertises them.
 const HIDDEN_FIELDS = ['sshPort', 'sshKeyPath'];
-
-const NETWORK_MODE_OPTIONS = [
-  // Static IP is disabled in the node driver for now — DHCP only.
-  // Uncomment this option (and the matching template block / defaults)
-  // to re-enable static addressing later.
-  // { label: 'Static IP', value: 'static' },
-  { label: 'DHCP', value: 'dhcp' },
-];
 
 // Rancher's auto-generated rke-machine-config CRD types numeric driver
 // flags as strings, so these fields must be persisted as strings even
@@ -189,12 +174,6 @@ export default {
 
   async fetch() {
     this.errors = [];
-    // Static IP is disabled; keep new/blank configs on DHCP. Re-enable
-    // static by uncommenting the NETWORK_MODE_OPTIONS entry above.
-    if (this.value && !this.value.networkMode) {
-      this.value.networkMode = 'dhcp';
-    }
-
     await this.loadSchemaFields();
     await this.loadCloudOptions();
   },
@@ -204,8 +183,6 @@ export default {
       errors:              null,
       fields:              null,
       cloudCredentialKeys: [],
-
-      networkModeOptions: NETWORK_MODE_OPTIONS,
 
       // Live FusionCompute lookups
       fc:                  null,
@@ -260,55 +237,6 @@ export default {
       },
       set(v) {
         this.value.portGroupUrn = v;
-      },
-    },
-    networkMode: {
-      get() {
-        // Static IP is disabled; DHCP is the only mode offered.
-        return this.value?.networkMode || 'dhcp';
-      },
-      set(v) {
-        this.value.networkMode = v;
-      },
-    },
-    vmIp: {
-      get() {
-        return this.value?.vmIp;
-      },
-      set(v) {
-        this.value.vmIp = v;
-      },
-    },
-    vmNetmask: {
-      get() {
-        return this.value?.vmNetmask;
-      },
-      set(v) {
-        this.value.vmNetmask = v;
-      },
-    },
-    vmGateway: {
-      get() {
-        return this.value?.vmGateway;
-      },
-      set(v) {
-        this.value.vmGateway = v;
-      },
-    },
-    dns1: {
-      get() {
-        return this.value?.dns1;
-      },
-      set(v) {
-        this.value.dns1 = v;
-      },
-    },
-    dns2: {
-      get() {
-        return this.value?.dns2;
-      },
-      set(v) {
-        this.value.dns2 = v;
       },
     },
 
@@ -686,76 +614,10 @@ export default {
           :searchable="true"
         />
       </div>
-      <div class="col span-6">
-        <LabeledSelect
-          v-model:value="networkMode"
-          :mode="mode"
-          :label="'IP Mode'"
-          :options="networkModeOptions"
-          :disabled="disabled || busy"
-        />
-      </div>
     </div>
-
-    <!--
-      Static IP is disabled in the node driver for now — DHCP only.
-      Uncomment this block (and the matching NETWORK_MODE_OPTIONS entry)
-      to re-enable static addressing later.
-    <template v-if="networkMode !== 'dhcp'">
-      <div class="row mt-10">
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="vmIp"
-            :mode="mode"
-            :label="'VM IP'"
-            :placeholder="'e.g. 192.0.2.10'"
-            :disabled="disabled || busy"
-          />
-        </div>
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="vmNetmask"
-            :mode="mode"
-            :label="'Netmask'"
-            :placeholder="'e.g. 255.255.248.0'"
-            :disabled="disabled || busy"
-          />
-        </div>
-      </div>
-      <div class="row mt-10">
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="vmGateway"
-            :mode="mode"
-            :label="'Gateway'"
-            :placeholder="'e.g. 192.0.2.1'"
-            :disabled="disabled || busy"
-          />
-        </div>
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="dns1"
-            :mode="mode"
-            :label="'Primary DNS'"
-            :disabled="disabled || busy"
-          />
-        </div>
-      </div>
-      <div class="row mt-10">
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="dns2"
-            :mode="mode"
-            :label="'Secondary DNS'"
-            :disabled="disabled || busy"
-          />
-        </div>
-      </div>
-    </template>
-    -->
     <div class="row mt-10">
       <div class="col span-12">
-        <span class="text-muted">The guest obtains its IPv4 address via DHCP; static IP / DNS fields are not sent.</span>
+        <span class="text-muted">The guest obtains its IPv4 address via DHCP.</span>
       </div>
     </div>
 

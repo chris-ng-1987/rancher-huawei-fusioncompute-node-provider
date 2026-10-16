@@ -3,12 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"strconv"
-	"strings"
 
 	"github.com/docker/machine/libmachine/drivers"
-	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnflag"
 	"github.com/docker/machine/libmachine/state"
 )
@@ -43,20 +40,6 @@ type Driver struct {
 	VMDescription string // optional description (audit fields)
 	Location      string // FusionCompute location URN
 
-	// --- VM customization (sent to FusionCompute as vmCustomization.*) ---
-	// NetworkMode selects how the guest NIC is configured:
-	//   - "static" (default): send vmCustomization.nicSpecification built
-	//     from VMIP/VMNetmask/VMGateway/DNS1/DNS2.
-	//   - "dhcp": send a bare `{ipVersion:4, sequenceNum:1}` nicSpecification
-	//     entry and let the guest obtain its address at boot.
-	//     VMIP/VMNetmask/VMGateway/DNS1/DNS2 are ignored in this mode.
-	NetworkMode string
-	VMIP        string // static IPv4
-	VMNetmask   string
-	VMGateway   string
-	DNS1        string
-	DNS2        string
-
 	// Guest password reset is exposed via --fusioncompute-set-vm-password.
 	// FusionCompute only honours vmCustomization.password when
 	// isUpdateVmPassword=true is also set; with the flag off (the default,
@@ -81,31 +64,14 @@ type Driver struct {
 
 	// --- Runtime state set during Create() ---
 	VMMoRef string // VM URN, set after clone succeeds
-	IPAddr  string // observed IP (mirror of VMIP)
+	IPAddr  string // observed guest IP, read from the VM spec after boot
 }
-
-// Network configuration modes accepted by --fusioncompute-network-mode.
-const (
-	// NetworkModeStatic stamps the guest NIC with the supplied
-	// vmCustomization.nicSpecification (VMIP/Netmask/Gateway/DNS).
-	NetworkModeStatic = "static"
-	// NetworkModeDHCP sends a bare {ipVersion,sequenceNum} nicSpecification
-	// entry so the guest obtains its address from DHCP at boot.
-	NetworkModeDHCP = "dhcp"
-)
 
 // DefaultSSHPort is the only SSH port the driver supports. FusionCompute
 // templates provisioned by this driver always run sshd on 22, so the port
 // is fixed rather than user-configurable (there is no
 // --fusioncompute-ssh-port flag).
 const DefaultSSHPort = 22
-
-// networkModeIsDHCP reports whether the driver should let the guest use
-// DHCP. Any value other than "dhcp" (including the empty legacy default)
-// is treated as static so existing saved configs keep working unchanged.
-func (d *Driver) networkModeIsDHCP() bool {
-	return strings.EqualFold(strings.TrimSpace(d.NetworkMode), NetworkModeDHCP)
-}
 
 // NewDriver returns a fresh Driver with sensible defaults. It is
 // registered with docker-machine via plugin.RegisterDriver in main.go.
@@ -126,7 +92,6 @@ func NewDriver(hostName string, storePath string) *Driver {
 		},
 		VMName:        hostName,
 		VMDescription: "Provisioned by docker-machine-driver-fusioncompute",
-		NetworkMode:   NetworkModeStatic,
 		CPUCount:      2,
 		MemoryMB:      4096,
 		DiskGB:        250,
@@ -212,39 +177,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			EnvVar: "FUSIONCOMPUTE_VM_DESCRIPTION",
 		},
 
-		// VM IP / network
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-network-mode",
-			Usage:  `How the guest NIC is configured: "static" (assign the IPv4 below) or "dhcp" (send a bare nicSpecification entry and let the guest obtain an address via DHCP)`,
-			EnvVar: "FUSIONCOMPUTE_NETWORK_MODE",
-			Value:  NetworkModeStatic,
-		},
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-vm-ip",
-			Usage:  "Static IPv4 address to assign to the new VM (static mode only)",
-			EnvVar: "FUSIONCOMPUTE_VM_IP",
-		},
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-vm-netmask",
-			Usage:  "Subnet mask, e.g. 255.255.255.0",
-			EnvVar: "FUSIONCOMPUTE_VM_NETMASK",
-		},
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-vm-gateway",
-			Usage:  "Default gateway IPv4",
-			EnvVar: "FUSIONCOMPUTE_VM_GATEWAY",
-		},
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-dns1",
-			Usage:  "Primary DNS",
-			EnvVar: "FUSIONCOMPUTE_DNS1",
-		},
-		mcnflag.StringFlag{
-			Name:   "fusioncompute-dns2",
-			Usage:  "Secondary DNS",
-			EnvVar: "FUSIONCOMPUTE_DNS2",
-		},
-
 		// SSH access — used by docker-machine *after* the VM is up to
 		// install Docker. docker-machine v0.16.x only supports key-based
 		// SSH (PasswordAuthentication=no is hard-coded in
@@ -305,16 +237,6 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.Location = opts.String("fusioncompute-location")
 	d.VMDescription = opts.String("fusioncompute-vm-description")
 
-	d.NetworkMode = opts.String("fusioncompute-network-mode")
-	if d.NetworkMode == "" {
-		d.NetworkMode = NetworkModeStatic
-	}
-	d.VMIP = opts.String("fusioncompute-vm-ip")
-	d.VMNetmask = opts.String("fusioncompute-vm-netmask")
-	d.VMGateway = opts.String("fusioncompute-vm-gateway")
-	d.DNS1 = opts.String("fusioncompute-dns1")
-	d.DNS2 = opts.String("fusioncompute-dns2")
-
 	d.SSHUser = opts.String("fusioncompute-ssh-user")
 	// SSH port is fixed at 22 — see DefaultSSHPort.
 	d.SSHPort = DefaultSSHPort
@@ -346,10 +268,6 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	if d.VMName == "" {
 		d.VMName = d.BaseDriver.MachineName
 	}
-
-	// If the user provided a pre-resolved IP, mirror it onto IPAddr so
-	// GetIP() returns something useful even before VM detail polling.
-	d.IPAddr = d.VMIP
 
 	return d.validate()
 }
@@ -394,12 +312,6 @@ func (d *Driver) validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("fusioncompute driver: missing required flags: %v", missing)
-	}
-	switch strings.ToLower(strings.TrimSpace(d.NetworkMode)) {
-	case "", NetworkModeStatic, NetworkModeDHCP:
-	default:
-		return fmt.Errorf("fusioncompute driver: invalid fusioncompute-network-mode %q (want %q or %q)",
-			d.NetworkMode, NetworkModeStatic, NetworkModeDHCP)
 	}
 	return nil
 }
@@ -467,26 +379,7 @@ func (d *Driver) GetState() (state.State, error) {
 // flags that don't need an API call and lets us fail fast with a clear
 // message instead of waiting for the clone task to fail.
 func (d *Driver) PreCreateCheck() error {
-	if err := d.validate(); err != nil {
-		return err
-	}
-	if d.VMIP != "" {
-		if ip := net.ParseIP(d.VMIP); ip == nil {
-			return fmt.Errorf("fusioncompute: invalid IPv4 address %q", d.VMIP)
-		}
-	}
-	if d.VMNetmask != "" {
-		if ip := net.ParseIP(d.VMNetmask); ip == nil {
-			return fmt.Errorf("fusioncompute: invalid netmask %q", d.VMNetmask)
-		}
-	}
-	if d.VMGateway != "" {
-		if ip := net.ParseIP(d.VMGateway); ip == nil {
-			return fmt.Errorf("fusioncompute: invalid gateway %q", d.VMGateway)
-		}
-	}
-	log.Debugf("fusioncompute pre-create check OK for machine=%s ip=%s", d.MachineName, d.VMIP)
-	return nil
+	return d.validate()
 }
 
 // helper to coerce "running"/"stopped" + power state into docker-machine state.State

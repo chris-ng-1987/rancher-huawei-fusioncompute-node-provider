@@ -7,9 +7,7 @@ When loaded, the extension renders the machine-pool form grouped into sections:
 
 - **Machine** — `cpu`, `memoryMb`, `diskGb` (numeric `UnitInput`s).
 - **Placement** — `templateId`, `datastoreUrn`, `location` (live `LabeledSelect`s).
-- **Network** — `portGroupUrn` and `networkMode` (DHCP only for now). Static IP / DNS
-  fields (`vmIp`, `vmNetmask`, `vmGateway`, `dns1`, `dns2`) are commented out in the
-  form and in the driver defaults; uncomment them to re-enable static addressing.
+- **Network** — `portGroupUrn` (live `LabeledSelect`); the guest NIC always uses DHCP.
 - **Access** — three states:
   1. `setVmPassword` off → `sshUser` + `sshPassword` shown, where `sshPassword` is the
      template's *existing* credential, used once by the driver to install its key
