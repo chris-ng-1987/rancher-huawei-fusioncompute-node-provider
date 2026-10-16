@@ -1,0 +1,46 @@
+# NodeDriver — registers the FusionCompute docker-machine driver with Rancher.
+#
+# Apply against the local cluster that hosts Rancher:
+#   kubectl --context=<rancher-local> apply -f deploy/nodedriver.yaml
+#
+# Field names are the docker-machine flags with the `fusioncompute-` prefix
+# stripped and camelCased (e.g. `fusioncompute-dcs-hostname` -> `dcsHostname`).
+apiVersion: management.cattle.io/v3
+kind: NodeDriver
+metadata:
+  name: fusioncompute
+  annotations:
+    # Lets Rancher auto-create the instrumented dynamic-schema (the form
+    # rendered on the "Cloud Credential" page) for a third-party driver.
+    # Without it the credential page is just key/value for every field.
+    lifecycle.cattle.io/create.node-driver-controller: "true"
+    # Credential visibility / UI hints. Read by Rancher when rendering the
+    # generic credential and machine-config forms.
+    publicCredentialFields: dcsHostname,dcsPort,dcsUsername,dcsSiteUri
+    privateCredentialFields: dcsPassword
+    optionalCredentialFields: dcsPort,dcsSiteUri
+    passwordFields: dcsPassword,sshPassword
+    defaults: dcsPort:7443,cpu:2,memoryMb:4096,diskGb:250,sshUser:root,networkMode:dhcp
+spec:
+  displayName: FusionCompute
+  active: true
+  builtin: false
+  addCloudCredential: true
+  # EDIT THIS: point at the driver binary. Tagged releases publish one asset
+  # per OS/arch; pick the one matching the host that runs Rancher (normally
+  # linux/amd64), e.g.
+  #   https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.1.0/docker-machine-driver-fusioncompute_linux_amd64
+  url: https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.1.0/docker-machine-driver-fusioncompute_linux_amd64
+  # EDIT THIS (optional): sha256 of the binary above. Each release ships a
+  # `checksums.txt`; take the value for the asset named in `url`.
+  checksum: ""
+  #
+  # whitelistDomains — optional host allow-list consulted by older Rancher
+  # releases. Rancher 2.15+ uses `ProxyEndpoint` CRs for the live dropdowns
+  # instead (see deploy/proxyendpoint.yaml); keep entries here too if you must
+  # support both. A bare IP cannot be allow-listed by a ProxyEndpoint.
+  #
+  # >>> add your FusionCompute VRM host(s)/IP(s) here, e.g.:
+  #   - vrm.example.com
+  #   - 192.0.2.50
+  whitelistDomains: []

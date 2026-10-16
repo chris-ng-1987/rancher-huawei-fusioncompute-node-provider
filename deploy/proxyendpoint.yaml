@@ -1,0 +1,31 @@
+# ProxyEndpoint — allow-lists the FusionCompute VRM for Rancher's server-side
+# `/meta/proxy`, which the UI extension uses to populate the Template /
+# Datastore / Cluster / Port Group dropdowns.
+#
+# Apply against the Rancher server's own cluster (cattle-system), not a
+# downstream cluster:
+#   kubectl --context=<rancher-local> apply -f deploy/proxyendpoint.yaml
+#
+# NOTE: a bare IP address is NOT permitted. Rancher validates
+# spec.routes[].domain with a regex whose final label must begin with a
+# letter, so `192.0.2.50` is rejected with `should match '<regex>'`. An
+# IP-addressed VRM therefore needs a DNS name that resolves from the Rancher
+# server; put that same name in the cloud credential's `dcsHostname` so the
+# browser's proxy URL matches this allow-list entry.
+#
+# The VRM must also present a TLS certificate that Rancher trusts and that
+# names the host you dial. A factory VRM serves a self-signed certificate
+# whose CN/SAN are a generated `vrmcaserver<hex>` name, so Rancher's proxy
+# (which verifies the upstream and has no skip-verify option) will fail. Fix
+# that either by re-issuing the VRM certificate with `DNS:<name>` in its SAN,
+# or by putting a TLS-terminating reverse proxy in front of the VRM.
+#
+# `%` in a domain matches exactly one label, e.g. `vrm.%.example.com`.
+apiVersion: management.cattle.io/v3
+kind: ProxyEndpoint
+metadata:
+  name: fusioncompute-vrm
+spec:
+  routes:
+    # EDIT THIS: one entry per VRM host name (must be a DNS name, not an IP).
+    - domain: vrm.example.com

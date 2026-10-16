@@ -1,0 +1,31 @@
+# --- Driver build output ---
+/driver/docker-machine-driver-fusioncompute
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --- Go test binaries / coverage ---
+*.test
+*.out
+
+# --- UI extension build output ---
+ui/node_modules/
+ui/dist/
+ui/dist-pkg/
+ui/.cache/
+ui/.shell/
+ui/pkg/fusioncompute/.shell/
+ui/yarn-error.log
+ui/package-lock.json
+ui/*.log
+
+# --- Editor / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+*.code-workspace
+
+# --- Local artifacts ---
+*.tar

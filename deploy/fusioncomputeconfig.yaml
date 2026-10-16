@@ -1,0 +1,55 @@
+# Example RKE machine config for the FusionCompute node driver.
+#
+# This is a ready-to-edit template; in normal use Rancher generates this CR
+# from the machine-pool form. Field names are the docker-machine flags with
+# the `fusioncompute-` prefix stripped and camelCased, and the numeric fields
+# are strings (Rancher's generated rke-machine-config CRD types them that way).
+#
+# Replace every example value with one from your own FusionCompute farm. The
+# Template / Datastore / Cluster / Port Group values can be read from the
+# corresponding URNs the UI dropdowns populate (or from the FC API).
+apiVersion: rke-machine-config.cattle.io/v1
+kind: FusioncomputeConfig
+metadata:
+  name: fusioncompute-example
+  namespace: default
+cpu: "4"
+memoryMb: "8192"
+diskGb: "250"
+osVersion: Linux
+
+# --- VRM connection (usually supplied via a Cloud Credential instead) ---
+dcsHostname: vrm.example.com
+dcsPort: "7443"
+dcsUsername: admin
+dcsPassword: ""
+dcsSiteUri: ""
+
+# --- Placement ---
+# templateId is the bare VM id of the template to clone, e.g. i-00000001.
+templateId: i-00000001
+# Full URNs, as returned by the FusionCompute API.
+datastoreUrn: urn:sites:1:datastores:1
+location: urn:sites:1:clusters:1
+portGroupUrn: urn:sites:1:dvswitchs:1:portgroups:1
+
+# --- Networking: DHCP only (each node in a pool needs its own address).
+# Static addressing is disabled in the node driver; uncomment the fields
+# below together with the matching UI/driver template blocks to re-enable.
+networkMode: dhcp
+# dns1: 192.0.2.53
+# dns2: 198.51.100.53
+# vmIp: 192.0.2.10
+# vmNetmask: 255.255.255.0
+# vmGateway: 192.0.2.1
+
+# --- Access ---
+# With setVmPassword=false the SSH user and the template's existing password
+# are used once to install the driver's key; leave sshPassword blank if the
+# template already trusts the key.
+setVmPassword: false
+sshUser: root
+sshPassword: ""
+sshKeyPath: ""
+
+vmDescription: ""

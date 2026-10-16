@@ -1,0 +1,53 @@
+# UIPlugin — delivers the custom machine-pool form for the FusionCompute
+# node driver.
+#
+# Apply to the Rancher local cluster:
+#   kubectl --context=<rancher-local> apply -f deploy/uiplugin.yaml
+#
+# `endpoint` points at a DIRECTORY (no trailing slash, no component.js) that
+# must contain:
+#
+#   files.txt                       <- manifest, one relative path per line
+#   plugin/
+#     package.json                  <- { name, version, main, files }
+#     <pkg>-<version>.umd.min.js    <- main entry Rancher auto-imports
+#     <pkg>-<version>.umd.min.<hash>.js
+#
+# This layout is produced by `ui/scripts/build-extension.sh` (or
+# `yarn build-pkg fusioncompute` in `ui/`); see ui/README.md for how to build it.
+#
+# EDIT `endpoint` to wherever you host that directory. For example:
+#
+#   GitHub Pages (published automatically by .github/workflows/release.yml):
+#     https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.1.0
+#
+#   Any static file host that can serve `ui/dist-pkg/extensions/`:
+#     https://<your-host>/extensions/fusioncompute/0.1.0
+#
+# Verify it resolves before applying:
+#   curl -s <endpoint>/files.txt
+#
+# NOTE: Rancher caches the bundle BY VERSION. Whenever you change the UI,
+# bump the version here AND in `ui/package.json` and
+# `ui/pkg/fusioncompute/package.json`; reusing a version means Rancher never
+# fetches your new files.
+apiVersion: catalog.cattle.io/v1
+kind: UIPlugin
+metadata:
+  name: fusioncompute
+  namespace: cattle-ui-plugin-system
+  labels:
+    app.kubernetes.io/name: fusioncompute
+    app.kubernetes.io/part-of: rancher-huawei-fusioncompute-node-provider
+spec:
+  plugin:
+    name: fusioncompute
+    version: 0.1.0
+    endpoint: https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.1.0
+    noCache: false
+    noAuth: false
+    metadata:
+      catalog.cattle.io/display-name: "FusionCompute Node Driver UI"
+      catalog.cattle.io/kube-version: ">= 1.16.0-0"
+      catalog.cattle.io/rancher-version: ">= 2.15.0-0"
+      catalog.cattle.io/ui-extensions-version: ">= 3.0.0 < 4.0.0"
