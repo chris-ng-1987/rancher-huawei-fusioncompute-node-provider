@@ -18,6 +18,36 @@ shipped as a monorepo with two artifacts that are built and released together:
 
 ---
 
+## TL;DR — install the v0.1.0 release
+
+The first release ([v0.1.0](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.1.0))
+already publishes the linux/amd64 driver binary and the UI bundle, and the manifests in
+`deploy/` already point at those artifacts — no build is needed. Prerequisites: Rancher
+2.15+, a template that meets the [VM template requirements](#vm-template-requirements),
+a DNS name for the VRM whose certificate Rancher trusts, and `kubectl` access to the
+cluster that hosts Rancher.
+
+```bash
+# 1. Replace vrm.example.com in deploy/proxyendpoint.yaml with your VRM DNS name
+#    (a bare IP cannot be allow-listed; see "Live dropdowns" below).
+
+# 2. Register the node driver, UI extension, and proxy allow-list
+kubectl --context=<rancher-local> apply -f deploy/nodedriver.yaml
+kubectl --context=<rancher-local> apply -f deploy/uiplugin.yaml
+kubectl --context=<rancher-local> apply -f deploy/proxyendpoint.yaml
+
+# 3. Wait until the UI bundle is cached (the UIPlugin reports "cached")
+kubectl -n cattle-ui-plugin-system get uiplugin fusioncompute -w
+```
+
+Then create a **FusionCompute** cloud credential (**Cluster Management → Cloud
+Credentials**) and add a node pool with the custom machine-pool form. On arm64, change
+`spec.url` in `nodedriver.yaml` to the `linux_arm64` asset and replace `spec.checksum`
+with its sha256 from [`checksums.txt`](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.1.0/checksums.txt).
+See [Deploy on Rancher](#deploy-on-rancher) for the full details.
+
+---
+
 ## Repository layout
 
 ```
@@ -187,7 +217,8 @@ Apply the manifests in `deploy/` against the cluster that hosts Rancher
 - `proxyendpoint.yaml` — the allow-list for the live dropdowns (see
   [Live dropdowns](#3-live-dropdowns)).
 
-Edit the URLs to point at your published artifacts before applying:
+The checked-in manifests already point at the v0.1.0 release artifacts. If you build and
+publish your own, update:
 
 - `nodedriver.yaml` → `spec.url` (the binary; use the matching OS/arch release asset).
 - `uiplugin.yaml` → `spec.plugin.endpoint` (the UIPlugin **directory**, no trailing

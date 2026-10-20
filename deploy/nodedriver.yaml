@@ -31,9 +31,10 @@ spec:
   # linux/amd64), e.g.
   #   https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.1.0/docker-machine-driver-fusioncompute_linux_amd64
   url: https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.1.0/docker-machine-driver-fusioncompute_linux_amd64
-  # EDIT THIS (optional): sha256 of the binary above. Each release ships a
-  # `checksums.txt`; take the value for the asset named in `url`.
-  checksum: ""
+  # sha256 of the binary above, taken from the release's `checksums.txt`.
+  # The value below matches the v0.1.0 linux/amd64 asset; update it if you
+  # change `url`.
+  checksum: 32cde8b71426a8c5cd295cd50efe17f611d8355a6791b9ba9d37a75f0f941d1e
   #
   # whitelistDomains — optional host allow-list consulted by older Rancher
   # releases. Rancher 2.15+ uses `ProxyEndpoint` CRs for the live dropdowns
