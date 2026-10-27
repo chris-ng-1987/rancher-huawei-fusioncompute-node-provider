@@ -83,13 +83,13 @@ then rearranges its output into the layout Rancher's `ui-plugin-catalog` control
 expects:
 
 ```
-dist-pkg/extensions/fusioncompute/0.1.0/
+dist-pkg/extensions/fusioncompute/<version>/
 ├── files.txt
 └── plugin/
-    ├── fusioncompute-0.1.0.umd.min.js                 # main entry
-    ├── fusioncompute-0.1.0.umd.min.<hash>.js          # shared deps chunk
-    ├── fusioncompute-0.1.0.umd.min.machine-config.js  # the form (lazy chunk)
-    └── package.json                                   # { rancher: true, main: ... }
+    ├── fusioncompute-<version>.umd.min.js                 # main entry
+    ├── fusioncompute-<version>.umd.min.<hash>.js          # shared deps chunk
+    ├── fusioncompute-<version>.umd.min.machine-config.js  # the form (lazy chunk)
+    └── package.json                                       # { rancher: true, main: ... }
 ```
 
 Reference: <https://github.com/rancher/ui-plugin-examples/tree/main/extensions/node-driver/1.0.4>
