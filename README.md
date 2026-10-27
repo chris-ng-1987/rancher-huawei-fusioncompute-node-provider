@@ -82,16 +82,23 @@ The Go module path is
 
 Prepare the template **before** converting it to a template in FusionCompute. The
 driver clones the selected template, boots the clone, then connects as the configured
-SSH user to install its public key and hand the host to docker-machine/Rancher.
+SSH user — using either the supplied private key or a one-time password — and hands the
+host to docker-machine/Rancher.
 
 1. **Linux guest with sshd on port 22.** The SSH port is hard-coded to `22` — there
    is no setting to override it.
-2. **A specific account (username + password) the driver can log in as once to
-   install its key.** This is the SSH user configured for the machine pool — **not
-   necessarily root**; use whatever account the template provisions (e.g. `ubuntu`).
-   The driver logs in with it once and appends its generated public key. This is the
-   default (password reset off). If you prefer not to embed a credential, either
-   instead:
+2. **Initial access for the configured SSH user.** This is the account configured for
+   the machine pool — **not necessarily root**; use whatever account the template
+   provisions (e.g. `ubuntu`). Choose one of:
+   - **Supply a private key (key-only).** Set `sshPrivateKey` (Rancher) or
+     `--fusioncompute-ssh-private-key` (standalone) to an unencrypted private key.
+     The template account's `authorized_keys` must already contain the matching public
+     key. The driver writes the private key to the machine store and uses it for the
+     initial login; no password is sent to FusionCompute. Key auth works under
+     `PermitRootLogin prohibit-password`.
+   - **Use the template's existing password once.** Supply `sshPassword` without
+     `setVmPassword`: the driver logs in with that account's existing password and
+     appends its generated public key. This is the default non-key flow.
    - **Reset the password on first boot.** The driver asks FusionCompute to reset the
      guest OS password. FusionCompute resets the **root** account only (the clone API
      has no username field and the reset is not permitted for other users), so the
@@ -104,9 +111,8 @@ SSH user to install its public key and hand the host to docker-machine/Rancher.
      ```
      then `systemctl restart sshd`. Verify with
      `sshd -T | grep -iE 'permitrootlogin|passwordauthentication'`.
-   - **Pre-bake the key.** Bake the driver's public key into the template account's
-     `authorized_keys` and provision with no password — key auth still works under
-     `PermitRootLogin prohibit-password`.
+   - **Pre-bake the generated key.** Bake the driver's generated public key into the
+     template account's `authorized_keys` and provision with no password.
 3. **The FusionCompute VM-agent installed.** The clone sends `vmCustomization.hostname`
    and, on reset, `vmCustomization.password`; FusionCompute can only apply that
    customization if the guest has the **FusionCompute VM-agent** installed. Install
@@ -120,7 +126,9 @@ SSH user to install its public key and hand the host to docker-machine/Rancher.
 Without a usable login the clone succeeds but the key install fails with
 `ssh: unable to authenticate, attempted methods [none password]` — either the supplied
 password for the configured SSH user is wrong, or (on the reset path) root password
-auth is disabled (`PermitRootLogin no`/`prohibit-password`).
+auth is disabled (`PermitRootLogin no`/`prohibit-password`). In key-only mode the same
+message means the template does not trust the supplied private key's public key for the
+configured SSH user.
 
 ---
 
@@ -133,7 +141,8 @@ auth is disabled (`PermitRootLogin no`/`prohibit-password`).
 4. Polls the returned async task until `progress == 100` and `status == "success"`.
 5. Captures the new VM's URN, then returns the guest IP that FusionCompute reports for
    the NIC (read from the VM spec at `vmConfig.nics[0].ip`) so docker-machine can SSH in.
-6. Waits for sshd, logs in once (password or baked key), and installs the generated
+6. Waits for sshd. In key-only mode it verifies an authenticated key handshake; in
+   password mode it logs in once with the bootstrap password and installs the generated
    public key.
 
 It also implements `Remove`, `Start`, `Stop`, `Restart`, `Kill`, and `GetState`, so the
@@ -304,19 +313,26 @@ The UI extension renders the machine pool in sections:
 - **Machine** — vCPU, memory, and system-disk size (unit-aware numeric inputs).
 - **Placement** — Template, Datastore, and Cluster (live selects).
 - **Network** — Port Group (the guest obtains its address via DHCP).
-- **Access** — the guest credential and the optional password reset:
-  1. Reset off → the SSH user and the template's *existing* password for that account (use
-     the template's own user — **not necessarily root**) are used once to install the
-     driver's key; leave the password blank if the template already trusts the key.
-  2. Reset on, generate → the driver generates a random password (stored on the node); no
-     password field is shown.
-  3. Reset on, no generate → the value entered is the *new* password FusionCompute resets
-     on first boot.
+- **Access** — choose **Authentication**:
+  1. **SSH private key** → paste an unencrypted private key. The driver writes it to the
+     machine store (`id_rsa`, mode `0600`), derives the matching public key, and uses it
+     for the initial login. The template must already trust that public key for the SSH
+     user; no password is sent to FusionCompute. Mutually exclusive with the
+     password/reset options and with `sshKeyPath`.
+  2. **Username and password**, reset off → the SSH user and the template's *existing*
+     password for that account (use the template's own user — **not necessarily root**)
+     are used once to install the driver's generated key; leave the password blank if the
+     template already trusts the key.
+  3. **Username and password**, reset on, generate → the driver generates a random
+     password (stored on the node); no password field is shown.
+  4. **Username and password**, reset on, no generate → the value entered is the *new*
+     password FusionCompute resets on first boot.
 - **Advanced** — the remaining driver settings via the generic `<Questions>` renderer.
 
-When the reset is on, the SSH user is hidden: FusionCompute resets **root** and the driver
-logs in as root for the key install and later logins. SSH port and key path are hidden
-(SSH is always 22 and the driver manages its own key).
+When a password reset is on, the SSH user is hidden: FusionCompute resets **root** and the
+driver logs in as root for the key install and later logins. SSH port and key path are
+hidden (SSH is always 22 and a path-based key is for standalone docker-machine); the
+**SSH private key** authentication mode is the Rancher-native key-only option.
 
 `deploy/fusioncomputeconfig.yaml` is a ready-to-edit example `FusioncomputeConfig`.
 
@@ -348,9 +364,15 @@ docker-machine create -d fusioncompute \
 `--fusioncompute-dcs-hostname` may also embed the port (`vrm.example.com:7443`), in which
 case `--fusioncompute-dcs-port` is ignored.
 
-`Create` generates a machine SSH key if none is supplied. For access to the new guest,
-either:
+For access to the new guest, choose one mode:
 
+- `--fusioncompute-ssh-private-key="$FUSIONCOMPUTE_SSH_PRIVATE_KEY"` — key-only access.
+  Pass the unencrypted private key contents (prefer the environment variable over a
+  command-line argument so the key doesn't land in shell history or the process list).
+  The driver writes it to `<machine>/id_rsa` (mode `0600`), derives `id_rsa.pub`, and
+  uses the key for the initial login. The template must already trust the matching public
+  key for `--fusioncompute-ssh-user`; no password is sent to FusionCompute. Mutually
+  exclusive with the password/reset options and `--fusioncompute-ssh-key-path`.
 - `--fusioncompute-generate-password=true` — the driver generates a random root password,
   resets it on first boot via FusionCompute's guest customization
   (`vmCustomization.password` + `isUpdateVmPassword=true`), persists it at
@@ -360,8 +382,10 @@ either:
   with an operator-chosen password. Setting `--fusioncompute-set-vm-password` with no
   password also auto-generates one, so a blank password is never sent.
 
-Both require the template to support FusionCompute guest customization. With neither, the
-template must already trust the generated `id_rsa.pub`.
+The password flows require the template to support FusionCompute guest customization.
+With none of the options above, the template must already trust the generated
+`id_rsa.pub`. Private keys must be unencrypted: libmachine cannot prompt for or decrypt a
+passphrase-protected key.
 
 The reset always targets the **root** account. FusionCompute's `vmCustomization` has no
 username field, and its `changePassword` action is only permitted for root on Linux, so
@@ -393,14 +417,21 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-location`            | `FUSIONCOMPUTE_LOCATION`      | no       | FusionCompute location (cluster) URN         |
 | `--fusioncompute-vm-description`      | `FUSIONCOMPUTE_VM_DESCRIPTION`| no       | Description string for the new VM            |
 | `--fusioncompute-ssh-user`            | `FUSIONCOMPUTE_SSH_USER`      | no       | OS user docker-machine SSHes in as (default `root`) |
-| `--fusioncompute-ssh-key-path`        | `FUSIONCOMPUTE_SSH_KEY_PATH`  | no       | Private key used for SSH (libmachine only supports key auth) |
-| `--fusioncompute-ssh-password`        | `FUSIONCOMPUTE_SSH_PASSWORD`  | no       | Guest password: the template's existing credential, or the new one to reset with `--fusioncompute-set-vm-password` |
+| `--fusioncompute-ssh-private-key`     | `FUSIONCOMPUTE_SSH_PRIVATE_KEY`| no      | Unencrypted private key contents for key-only initial access; template must already trust the matching public key. Mutually exclusive with the password/reset and key-path options |
+| `--fusioncompute-ssh-key-path`        | `FUSIONCOMPUTE_SSH_KEY_PATH`  | no       | Path to a pre-provisioned private key on the host running the driver; template must already trust the matching public key. Mutually exclusive with `--fusioncompute-ssh-private-key` |
+| `--fusioncompute-ssh-password`        | `FUSIONCOMPUTE_SSH_PASSWORD`  | no       | Guest password: the template's existing credential, or the new one to reset with `--fusioncompute-set-vm-password`. Used only as a one-time bootstrap to install the SSH key |
 | `--fusioncompute-set-vm-password`     | `FUSIONCOMPUTE_SET_VM_PASSWORD`| no      | Send `isUpdateVmPassword=true` so FC applies the password on first boot |
 | `--fusioncompute-generate-password`   | `FUSIONCOMPUTE_GENERATE_PASSWORD`| no    | Generate a random guest password, reset it on clone, and store it at `<machine>/fusioncompute-generated-password` (overrides `--fusioncompute-ssh-password`) |
 | `--fusioncompute-keep-failed-vm`      | `FUSIONCOMPUTE_KEEP_FAILED_VM`| no       | Keep the cloned VM if provisioning fails after the clone (default: delete it to avoid orphans) |
 
 > The SSH port is fixed at `22` — FusionCompute templates provisioned by this driver always
 > run sshd on 22, so there is no flag to override it.
+
+> In Rancher, `sshPrivateKey` is part of the `FusioncomputeConfig` machine config. The UI
+> masks it and the driver clears it from its own state after writing `<machine>/id_rsa`,
+> but the CR itself still contains the key — treat it as sensitive and restrict RBAC
+> accordingly. For a shared operator-managed key, prefer `sshKeyPath` with the private key
+> mounted into the Rancher container and its public key baked into the template.
 
 ---
 

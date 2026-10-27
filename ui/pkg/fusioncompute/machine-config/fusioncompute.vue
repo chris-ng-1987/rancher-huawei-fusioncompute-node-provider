@@ -11,7 +11,10 @@
 //        - cpu / memoryMb / diskGb  -> UnitInput (units)
 //        - templateId / datastoreUrn / portGroupUrn -> LabeledSelect,
 //          populated live from the FusionCompute API via Rancher's
-//          meta proxy (see ../fusioncompute.js).
+//          meta proxy (see ../fusioncompute.js)
+//        - Access -> chooses between an operator-supplied SSH private key
+//          (key-only initial access) and the existing username/password
+//          bootstrap.
 //
 // Reference: ui-plugin-examples/pkg/node-driver/machine-config/openstack.vue
 // Shell v3 is Vue 3: plain options object, `v-model:value`, no `$set`.
@@ -43,6 +46,7 @@ const OVERRIDDEN_FIELDS = [
   'setVmPassword',
   'generatePassword',
   'sshPassword',
+  'sshPrivateKey',
   'sshUser',
 ];
 
@@ -183,6 +187,10 @@ export default {
       errors:              null,
       fields:              null,
       cloudCredentialKeys: [],
+      authOptions:         [
+        { label: 'SSH private key', value: 'key' },
+        { label: 'Username and password', value: 'password' },
+      ],
 
       // Live FusionCompute lookups
       fc:                  null,
@@ -263,6 +271,30 @@ export default {
           // The driver generates the value; ignore any typed-in password.
           this.value.sshPassword = undefined;
         }
+      },
+    },
+    authMethod: {
+      get() {
+        return this.value?.sshPrivateKey ? 'key' : 'password';
+      },
+      set(v) {
+        if (v === 'key') {
+          // Key-only access: the driver must not also attempt a password
+          // bootstrap or a FusionCompute password reset.
+          this.value.sshPassword = undefined;
+          this.value.setVmPassword = false;
+          this.value.generatePassword = false;
+        } else {
+          this.value.sshPrivateKey = undefined;
+        }
+      },
+    },
+    sshPrivateKey: {
+      get() {
+        return this.value?.sshPrivateKey;
+      },
+      set(v) {
+        this.value.sshPrivateKey = v;
       },
     },
     sshPassword: {
@@ -627,29 +659,18 @@ export default {
       </div>
     </div>
     <div class="row mt-10">
-      <div class="col span-12">
-        <Checkbox
-          v-model:value="setVmPassword"
+      <div class="col span-6">
+        <LabeledSelect
+          v-model:value="authMethod"
           :mode="mode"
-          :label="'Reset the guest OS password on first boot (requires FusionCompute guest customization)'"
+          :label="'Authentication'"
+          :options="authOptions"
           :disabled="disabled || busy"
         />
       </div>
     </div>
-    <div
-      v-if="setVmPassword"
-      class="row mt-10"
-    >
-      <div class="col span-12">
-        <Checkbox
-          v-model:value="generatePassword"
-          :mode="mode"
-          :label="'Generate a random password (stored on the Rancher node; no need to type one)'"
-          :disabled="disabled || busy"
-        />
-      </div>
-    </div>
-    <template v-if="!setVmPassword">
+
+    <template v-if="authMethod === 'key'">
       <div class="row mt-10">
         <div class="col span-6">
           <LabeledInput
@@ -660,37 +681,96 @@ export default {
             :disabled="disabled || busy"
           />
         </div>
-        <div class="col span-6">
-          <LabeledInput
-            v-model:value="sshPassword"
-            type="password"
-            :mode="mode"
-            :label="'Existing guest password (used once to install the key; leave blank if the template already trusts the key)'"
-            :disabled="disabled || busy"
-          />
-        </div>
       </div>
-    </template>
-    <template v-else>
-      <div
-        v-if="!generatePassword"
-        class="row mt-10"
-      >
-        <div class="col span-6">
+      <div class="row mt-10">
+        <div class="col span-12">
           <LabeledInput
-            v-model:value="sshPassword"
-            type="password"
+            v-model:value="sshPrivateKey"
+            type="multiline-password"
             :mode="mode"
-            :label="'New guest password (reset on first boot)'"
+            :label="'SSH private key'"
+            :placeholder="'-----BEGIN OPENSSH PRIVATE KEY-----'"
             :disabled="disabled || busy"
           />
         </div>
       </div>
       <div class="row mt-10">
         <div class="col span-12">
-          <span class="text-muted">FusionCompute resets the password for the <strong>root</strong> account (the reset is not permitted for other users); the driver logs in as root to install the SSH key. The template must allow root password SSH.</span>
+          <span class="text-muted">
+            Paste an unencrypted private key. The template must already trust the matching public key for the SSH user.
+            No password is sent to FusionCompute or used for SSH.
+          </span>
         </div>
       </div>
+    </template>
+
+    <template v-else>
+      <div class="row mt-10">
+        <div class="col span-12">
+          <Checkbox
+            v-model:value="setVmPassword"
+            :mode="mode"
+            :label="'Reset the guest OS password on first boot (requires FusionCompute guest customization)'"
+            :disabled="disabled || busy"
+          />
+        </div>
+      </div>
+      <div
+        v-if="setVmPassword"
+        class="row mt-10"
+      >
+        <div class="col span-12">
+          <Checkbox
+            v-model:value="generatePassword"
+            :mode="mode"
+            :label="'Generate a random password (stored on the Rancher node; no need to type one)'"
+            :disabled="disabled || busy"
+          />
+        </div>
+      </div>
+      <template v-if="!setVmPassword">
+        <div class="row mt-10">
+          <div class="col span-6">
+            <LabeledInput
+              v-model:value="sshUser"
+              :mode="mode"
+              :label="'SSH user'"
+              :placeholder="'root'"
+              :disabled="disabled || busy"
+            />
+          </div>
+          <div class="col span-6">
+            <LabeledInput
+              v-model:value="sshPassword"
+              type="password"
+              :mode="mode"
+              :label="'Existing guest password (used once to install the key; leave blank if the template already trusts the key)'"
+              :disabled="disabled || busy"
+            />
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <div
+          v-if="!generatePassword"
+          class="row mt-10"
+        >
+          <div class="col span-6">
+            <LabeledInput
+              v-model:value="sshPassword"
+              type="password"
+              :mode="mode"
+              :label="'New guest password (reset on first boot)'"
+              :disabled="disabled || busy"
+            />
+          </div>
+        </div>
+        <div class="row mt-10">
+          <div class="col span-12">
+            <span class="text-muted">FusionCompute resets the password for the <strong>root</strong> account (the reset is not permitted for other users); the driver logs in as root to install the SSH key. The template must allow root password SSH.</span>
+          </div>
+        </div>
+      </template>
     </template>
 
     <template v-if="fields">

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/mcnflag"
@@ -50,6 +51,7 @@ type Driver struct {
 	SSHUser          string // OS user docker-machine will log in as
 	SSHPort          int    // SSH port on the VM
 	SSHKeyPath       string // private key path (key-based auth only)
+	SSHPrivateKey    string `json:"-"` // unencrypted key contents; never persisted in machine state
 	SSHPassword      string // optional: sent via vmCustomization.password
 	SetVMPassword    bool   // when true, set isUpdateVmPassword=true on clone
 	GeneratePassword bool   // when true, generate a random guest password and reset it on clone
@@ -57,10 +59,23 @@ type Driver struct {
 	// SSH auth is **key-based only** because libmachine v0.16.x
 	// hard-codes `-o PasswordAuthentication=no` and the
 	// StandardSSHClientCreator never adds passwords to the ssh.ClientConfig.
-	// We expose SSHPassword purely so it can be set on the cloned VM's
-	// OS account via FusionCompute's vmCustomization.password field —
-	// useful when you can't bake the public key into the template and
-	// need a credential you can use out-of-band to install the key.
+	//
+	// There are three ways to provide the key docker-machine will use:
+	//
+	//  1. --fusioncompute-ssh-private-key: the operator supplies an
+	//     unencrypted private key. The driver writes it to the machine
+	//     store and uses it for the initial login, so the template must
+	//     already trust the matching public key. No password is sent to
+	//     FusionCompute. Mutually exclusive with options 2 and 3.
+	//  2. --fusioncompute-ssh-key-path: path to a pre-provisioned private
+	//     key on the host running docker-machine/the Rancher driver. The
+	//     template must already trust the matching public key.
+	//  3. neither: the driver generates a key pair at <machine>/id_rsa and
+	//     --fusioncompute-ssh-password (plus --fusioncompute-set-vm-password)
+	//     is used once to install the public key on the guest.
+	//
+	// --fusioncompute-ssh-password is only a bootstrap/fallback credential;
+	// libmachine itself never uses it for SSH.
 
 	// --- Runtime state set during Create() ---
 	VMMoRef string // VM URN, set after clone succeeds
@@ -180,9 +195,9 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		// SSH access — used by docker-machine *after* the VM is up to
 		// install Docker. docker-machine v0.16.x only supports key-based
 		// SSH (PasswordAuthentication=no is hard-coded in
-		// libmachine/ssh/client.go), so --fusioncompute-ssh-key-path is
-		// the supported path. --fusioncompute-ssh-password is provided
-		// only as a way to push the password into the cloned VM via
+		// libmachine/ssh/client.go), so the key options below are the
+		// supported paths. --fusioncompute-ssh-password is provided only
+		// as a way to push a password into the cloned VM via
 		// FusionCompute's vmCustomization.password field, so an operator
 		// can log in out-of-band and install the public key.
 		mcnflag.StringFlag{
@@ -192,8 +207,13 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Value:  "root",
 		},
 		mcnflag.StringFlag{
+			Name:   "fusioncompute-ssh-private-key",
+			Usage:  "Unencrypted private SSH key contents used for initial access to the new VM; the template must already trust the matching public key. Mutually exclusive with the password/reset and key-path options",
+			EnvVar: "FUSIONCOMPUTE_SSH_PRIVATE_KEY",
+		},
+		mcnflag.StringFlag{
 			Name:   "fusioncompute-ssh-key-path",
-			Usage:  "Path to the private SSH key used to authenticate docker-machine to the new VM (forwarded to libmachine's SSH client)",
+			Usage:  "Path to a pre-provisioned private SSH key used to authenticate docker-machine to the new VM; the template must already trust the matching public key",
 			EnvVar: "FUSIONCOMPUTE_SSH_KEY_PATH",
 		},
 		mcnflag.StringFlag{
@@ -241,6 +261,7 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	// SSH port is fixed at 22 — see DefaultSSHPort.
 	d.SSHPort = DefaultSSHPort
 	d.SSHKeyPath = opts.String("fusioncompute-ssh-key-path")
+	d.SSHPrivateKey = strings.TrimSpace(opts.String("fusioncompute-ssh-private-key"))
 	d.SSHPassword = opts.String("fusioncompute-ssh-password")
 	d.SetVMPassword = opts.Bool("fusioncompute-set-vm-password")
 	d.GeneratePassword = opts.Bool("fusioncompute-generate-password")
@@ -312,6 +333,19 @@ func (d *Driver) validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("fusioncompute driver: missing required flags: %v", missing)
+	}
+
+	// SSH auth modes are mutually exclusive. A supplied private key is used
+	// directly for the initial login; there is no password bootstrap, and a
+	// separate key path would make it ambiguous which key docker-machine
+	// should use.
+	if d.SSHPrivateKey != "" {
+		if d.SSHKeyPath != "" {
+			return fmt.Errorf("fusioncompute driver: --fusioncompute-ssh-private-key and --fusioncompute-ssh-key-path are mutually exclusive")
+		}
+		if d.SSHPassword != "" || d.SetVMPassword || d.GeneratePassword {
+			return fmt.Errorf("fusioncompute driver: --fusioncompute-ssh-private-key cannot be combined with --fusioncompute-ssh-password, --fusioncompute-set-vm-password, or --fusioncompute-generate-password")
+		}
 	}
 	return nil
 }

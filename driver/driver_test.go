@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/docker/machine/libmachine/drivers"
+	libssh "github.com/docker/machine/libmachine/ssh"
 	"github.com/docker/machine/libmachine/state"
 )
 
@@ -221,6 +224,64 @@ func TestValidate(t *testing.T) {
 	d.DatastoreURN = "urn:ds"
 	if err := d.validate(); err != nil {
 		t.Fatalf("expected validation to pass with required fields set, got %v", err)
+	}
+}
+
+// TestValidateSSHAuthModes verifies that the private-key mode is accepted on
+// its own and rejected when combined with the password/recovery or key-path
+// modes.
+func TestValidateSSHAuthModes(t *testing.T) {
+	base := func() *Driver {
+		return &Driver{
+			DCSHostname:  "dcs.example.com",
+			DCSUsername:  "admin",
+			DCSPassword:  "secret",
+			TemplateID:   "tpl",
+			PortGroupURN: "urn:pg",
+			DatastoreURN: "urn:ds",
+		}
+	}
+
+	keyOnly := base()
+	keyOnly.SSHPrivateKey = "key"
+	if err := keyOnly.validate(); err != nil {
+		t.Fatalf("private key alone should validate, got %v", err)
+	}
+
+	for name, mutate := range map[string]func(*Driver){
+		"key path":          func(d *Driver) { d.SSHKeyPath = "/tmp/id_rsa" },
+		"password":          func(d *Driver) { d.SSHPassword = "secret" },
+		"set vm password":   func(d *Driver) { d.SetVMPassword = true },
+		"generate password": func(d *Driver) { d.GeneratePassword = true },
+	} {
+		d := base()
+		d.SSHPrivateKey = "key"
+		mutate(d)
+		if err := d.validate(); err == nil {
+			t.Errorf("%s combined with private key should be rejected", name)
+		}
+	}
+}
+
+// TestBuildCloneSpecKeyOnly verifies that key-only provisioning never sends a
+// guest password or requests a password reset from FusionCompute.
+func TestBuildCloneSpecKeyOnly(t *testing.T) {
+	d := &Driver{
+		VMName:        "key-only",
+		CPUCount:      2,
+		MemoryMB:      4096,
+		DiskGB:        100,
+		PortGroupURN:  "urn:pg",
+		DatastoreURN:  "urn:ds",
+		SSHPrivateKey: "key",
+	}
+
+	spec := d.buildCloneSpec()
+	if spec.VMCustomization.Password != "" {
+		t.Errorf("password = %q, want empty in key-only mode", spec.VMCustomization.Password)
+	}
+	if spec.VMCustomization.IsUpdateVMPassword || spec.VMCustomization.UpdatePassword {
+		t.Error("key-only mode must not request a guest password reset")
 	}
 }
 
@@ -462,6 +523,83 @@ func TestPublicSSHKeyPath(t *testing.T) {
 	}
 }
 
+// TestEnsureSSHKeyFromPrivateKey verifies an operator-supplied private key is
+// written to the machine store, its public key is derived, and the driver no
+// longer keeps a second copy of the private key in its serialized state.
+func TestEnsureSSHKeyFromPrivateKey(t *testing.T) {
+	store := t.TempDir()
+	d := NewDriver("key-node", store)
+
+	kp, err := libssh.NewKeyPair()
+	if err != nil {
+		t.Fatalf("generate test key: %v", err)
+	}
+	d.SSHPrivateKey = string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: kp.PrivateKey}))
+
+	if err := d.ensureSSHKey(); err != nil {
+		t.Fatalf("ensureSSHKey: %v", err)
+	}
+
+	want := filepath.Join(store, "machines", "key-node", "id_rsa")
+	if got := d.GetSSHKeyPath(); got != want {
+		t.Fatalf("SSH key path = %q, want %q", got, want)
+	}
+	if d.BaseDriver.SSHKeyPath != want {
+		t.Errorf("BaseDriver.SSHKeyPath = %q, want %q", d.BaseDriver.SSHKeyPath, want)
+	}
+
+	info, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("stat private key: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("private key mode = %o, want 0600", perm)
+	}
+
+	pub, err := os.ReadFile(want + ".pub")
+	if err != nil {
+		t.Fatalf("read public key: %v", err)
+	}
+	if strings.TrimSpace(string(pub)) != strings.TrimSpace(string(kp.PublicKey)) {
+		t.Errorf("derived public key does not match generated key pair")
+	}
+
+	if d.SSHPrivateKey != "" {
+		t.Error("SSHPrivateKey should be cleared after it is materialized")
+	}
+}
+
+// TestEnsureSSHKeyExplicitPathMustExist verifies the driver does not silently
+// generate a new key at a user-specified path (that key would not be trusted
+// by the template).
+func TestEnsureSSHKeyExplicitPathMustExist(t *testing.T) {
+	d := NewDriver("n", t.TempDir())
+	d.SSHKeyPath = filepath.Join(t.TempDir(), "missing-id_rsa")
+
+	err := d.ensureSSHKey()
+	if err == nil {
+		t.Fatal("expected an error for a missing explicit key path")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %v, want a clear missing-key message", err)
+	}
+}
+
+// TestEnsureSSHKeyRejectsInvalidPrivateKey verifies parsing happens before
+// writing, so a bad key never leaves a partial key pair behind.
+func TestEnsureSSHKeyRejectsInvalidPrivateKey(t *testing.T) {
+	store := t.TempDir()
+	d := NewDriver("bad-key", store)
+	d.SSHPrivateKey = "not a private key"
+
+	if err := d.ensureSSHKey(); err == nil {
+		t.Fatal("expected an error for an invalid private key")
+	}
+	if _, err := os.Stat(filepath.Join(store, "machines", "bad-key", "id_rsa")); !os.IsNotExist(err) {
+		t.Fatalf("invalid key must not be written, stat err=%v", err)
+	}
+}
+
 // TestSSHPortFixed verifies the SSH port is always 22, regardless of any
 // value a legacy saved config may carry: there is no
 // --fusioncompute-ssh-port flag.
@@ -492,6 +630,21 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 	if d.DCSHostname != "dcs.example.com" || d.DCSUsername != "admin" {
 		t.Fatalf("unmarshaled %+v", d)
+	}
+}
+
+// TestSSHPrivateKeyNotPersisted guards the json:"-" tag: libmachine saves the
+// driver state before Create, so the key contents must never reach config.json.
+func TestSSHPrivateKeyNotPersisted(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+	d.SSHPrivateKey = "super-secret-private-key"
+
+	raw, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), d.SSHPrivateKey) {
+		t.Fatal("private key contents must not be serialized into the machine config")
 	}
 }
 

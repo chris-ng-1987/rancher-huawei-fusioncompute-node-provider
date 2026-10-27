@@ -8,25 +8,32 @@ When loaded, the extension renders the machine-pool form grouped into sections:
 - **Machine** — `cpu`, `memoryMb`, `diskGb` (numeric `UnitInput`s).
 - **Placement** — `templateId`, `datastoreUrn`, `location` (live `LabeledSelect`s).
 - **Network** — `portGroupUrn` (live `LabeledSelect`); the guest NIC always uses DHCP.
-- **Access** — three states:
-  1. `setVmPassword` off → `sshUser` + `sshPassword` shown, where `sshPassword` is the
-     template's *existing* credential, used once by the driver to install its key
-     (leave blank if the template already trusts the key).
-  2. `setVmPassword` on, `generatePassword` on → the driver generates a random password
-     (stored on the node); no password field is shown.
-  3. `setVmPassword` on, `generatePassword` off → `sshPassword` is the *new* password
-     FusionCompute resets on first boot.
+- **Access** — choose an **Authentication** method:
+  1. **SSH private key** → `sshUser` + `sshPrivateKey` shown. The private key must be
+     unencrypted; the driver writes it to the machine store and uses it for the initial
+     login. The template must already trust the matching public key. No password is sent
+     to FusionCompute. Selecting this mode clears `sshPassword`, `setVmPassword`, and
+     `generatePassword`.
+  2. **Username and password**, `setVmPassword` off → `sshUser` + `sshPassword` shown,
+     where `sshPassword` is the template's *existing* credential, used once by the driver
+     to install its key (leave blank if the template already trusts the key).
+  3. **Username and password**, `setVmPassword` on, `generatePassword` on → the driver
+     generates a random password (stored on the node); no password field is shown.
+  4. **Username and password**, `setVmPassword` on, `generatePassword` off →
+     `sshPassword` is the *new* password FusionCompute resets on first boot.
 
   When reset is on, `sshUser` is hidden: FusionCompute resets the **root** account (the
   clone API has no username field and the reset is only permitted for root), and the
-  driver forces the SSH user to root for the key install and later logins.
+  driver forces the SSH user to root for the key install and later logins. Selecting the
+  username/password mode clears `sshPrivateKey`.
 - **Advanced** — everything else via the same `<Questions>` renderer the generic form
   uses (`vmDescription`, etc.).
 
 Cloud-credential fields (`dcsHostname`, `dcsPort`, `dcsUsername`, `dcsPassword`,
 `dcsSiteUri`) are excluded so they aren't duplicated. `sshPort` is hidden because SSH is
-always on port 22, and `sshKeyPath` is hidden so the driver's own generated key path
-can't be overridden.
+always on port 22, and `sshKeyPath` is hidden because the Rancher UI provides
+`sshPrivateKey` instead of a server-local path. Standalone docker-machine users can still
+set `--fusioncompute-ssh-key-path`.
 
 ## Layout
 

@@ -258,9 +258,35 @@ func (d *Driver) Create() (err error) {
 	return d.installAuthorizedKey(c)
 }
 
+// ensureSSHKey materializes the key pair docker-machine/Rancher will use.
+//
+// Precedence:
+//
+//  1. --fusioncompute-ssh-private-key: write the operator-supplied key to
+//     the machine store and derive the matching public key. The key is used
+//     for the initial login, so the template must already trust it.
+//  2. --fusioncompute-ssh-key-path: use a pre-provisioned key. It must
+//     exist; silently generating a different key at the operator's path
+//     would produce a key the template does not trust.
+//  3. neither: generate a key pair at libmachine's default
+//     (<machine>/id_rsa). The password bootstrap installs its public key.
 func (d *Driver) ensureSSHKey() error {
-	path := d.GetSSHKeyPath()
-	if path == "" && d.BaseDriver != nil {
+	if d.SSHPrivateKey != "" {
+		return d.writeSSHPrivateKey()
+	}
+
+	if d.SSHKeyPath != "" {
+		if _, err := os.Stat(d.SSHKeyPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("fusioncompute: SSH key %s does not exist; provision the key or use --fusioncompute-ssh-private-key", d.SSHKeyPath)
+			}
+			return fmt.Errorf("fusioncompute: stat SSH key %s: %w", d.SSHKeyPath, err)
+		}
+		return nil
+	}
+
+	path := ""
+	if d.BaseDriver != nil {
 		path = d.BaseDriver.GetSSHKeyPath()
 		d.SSHKeyPath = path
 		d.BaseDriver.SSHKeyPath = path
@@ -273,6 +299,48 @@ func (d *Driver) ensureSSHKey() error {
 	}
 	log.Infof("Generating SSH keypair at %s", path)
 	return ssh.GenerateSSHKey(path)
+}
+
+// writeSSHPrivateKey persists an operator-supplied private key in the
+// machine store (mode 0600), derives its public key, and points
+// BaseDriver.SSHKeyPath at it. The private key is cleared from the driver
+// struct afterwards so it is not duplicated into the persisted machine
+// config.
+func (d *Driver) writeSSHPrivateKey() error {
+	key := strings.TrimSpace(d.SSHPrivateKey)
+	if key == "" {
+		return fmt.Errorf("fusioncompute: --fusioncompute-ssh-private-key is empty")
+	}
+
+	// Parse before writing so an invalid key never replaces a working key.
+	signer, err := gossh.ParsePrivateKey([]byte(key + "\n"))
+	if err != nil {
+		return fmt.Errorf("fusioncompute: parse SSH private key: %w (the key must be unencrypted; passphrase-protected keys are not supported)", err)
+	}
+
+	path := ""
+	if d.BaseDriver != nil {
+		path = d.BaseDriver.ResolveStorePath("id_rsa")
+	}
+	if path == "" {
+		return fmt.Errorf("fusioncompute: no machine store path for the SSH key")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("fusioncompute: create SSH key directory: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(key+"\n"), 0600); err != nil {
+		return fmt.Errorf("fusioncompute: write SSH private key: %w", err)
+	}
+	pub := gossh.MarshalAuthorizedKey(signer.PublicKey())
+	if err := os.WriteFile(path+".pub", pub, 0644); err != nil {
+		return fmt.Errorf("fusioncompute: write SSH public key: %w", err)
+	}
+
+	d.SSHKeyPath = path
+	d.BaseDriver.SSHKeyPath = path
+	d.SSHPrivateKey = ""
+	log.Infof("FusionCompute: using the supplied SSH private key at %s", path)
+	return nil
 }
 
 // waitForGuestIP polls the cloned VM's spec (GET {vmURI}) until
@@ -299,14 +367,45 @@ func (d *Driver) waitForSSH(timeout, interval time.Duration) error {
 	addr := d.sshAddr()
 	deadline := time.Now().Add(timeout)
 	var last error
-	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, interval)
-		if err == nil {
-			_ = conn.Close()
-			return nil
+
+	// When no bootstrap password is configured, the key is the only way in.
+	// Verify an authenticated handshake (not just TCP) so a template that
+	// does not trust the key fails during Create instead of later during
+	// Rancher's own node bootstrap.
+	keyOnly := d.SSHPassword == ""
+	var cfg *gossh.ClientConfig
+	if keyOnly {
+		// Reuse libmachine's native SSH config so key parsing and host-key
+		// handling match the client Rancher itself will use.
+		nativeCfg, err := ssh.NewNativeConfig(d.GetSSHUsername(), &ssh.Auth{Keys: []string{d.GetSSHKeyPath()}})
+		if err != nil {
+			return fmt.Errorf("fusioncompute: build SSH config for key auth: %w", err)
 		}
-		last = err
+		nativeCfg.Timeout = interval
+		cfg = &nativeCfg
+	}
+
+	for time.Now().Before(deadline) {
+		if keyOnly {
+			client, err := gossh.Dial("tcp", addr, cfg)
+			if err == nil {
+				_ = client.Close()
+				return nil
+			}
+			last = err
+		} else {
+			conn, err := net.DialTimeout("tcp", addr, interval)
+			if err == nil {
+				_ = conn.Close()
+				return nil
+			}
+			last = err
+		}
 		time.Sleep(interval)
+	}
+
+	if keyOnly {
+		return fmt.Errorf("fusioncompute: key-based SSH to %s as %q failed: %w (the template must already trust %s)", addr, d.GetSSHUsername(), last, d.publicSSHKeyPath())
 	}
 	return fmt.Errorf("fusioncompute: SSH %s not reachable: %w", addr, last)
 }
