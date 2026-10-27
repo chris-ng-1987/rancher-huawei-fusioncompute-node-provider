@@ -1,7 +1,7 @@
 {
   "name": "fusioncompute",
   "description": "FusionCompute node-driver UI extension for Rancher 2.15+ (RKE2/K3s).",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "private": false,
   "rancher": {
     "annotations": {

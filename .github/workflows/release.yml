@@ -164,13 +164,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site
+          restore_dir="${RUNNER_TEMP}/fc-ui-releases"
+          mkdir -p "${restore_dir}"
           gh release list --exclude-drafts --limit 100 --json tagName --jq '.[].tagName' |
           while read -r tag; do
             gh release download "$tag" \
               --pattern 'fusioncompute-ui-*.tar.gz' \
-              --dir "/tmp/ui-${tag}" 2>/dev/null || true
+              --dir "${restore_dir}/${tag}" 2>/dev/null || true
           done
-          find /tmp -name 'fusioncompute-ui-*.tar.gz' -exec tar -C _site -xzf {} \;
+          find "${restore_dir}" -name 'fusioncompute-ui-*.tar.gz' -exec tar -C _site -xzf {} \;
 
       - name: Unpack bundle into site
         run: |
