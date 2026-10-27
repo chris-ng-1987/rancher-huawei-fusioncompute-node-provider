@@ -193,15 +193,21 @@ server-side.
 
 ## Releases
 
-Tagging a commit with `vX.Y.Z` triggers `.github/workflows/release.yml`, which:
+Tagging a commit with `vX.Y.Z` (stable) or `vX.Y.Z-beta.N` (pre-release) triggers
+`.github/workflows/release.yml`, which:
 
 - builds `docker-machine-driver-fusioncompute` for linux/amd64, linux/arm64,
   darwin/amd64, darwin/arm64 and windows/amd64;
 - builds the UI extension bundle;
 - publishes a GitHub release with the binaries, the UI bundle tarball and
-  `checksums.txt`;
+  `checksums.txt`; hyphenated tags are marked as **pre-releases**;
 - deploys the UI extension directory tree to **GitHub Pages**, so the `UIPlugin` CR can
   fetch `https://<owner>.github.io/<repo>/extensions/fusioncompute/<version>/files.txt`.
+  Previously published version directories are restored before each deployment, so a
+  new (including beta) release does not remove older endpoints.
+
+The tag must match the version in `ui/pkg/fusioncompute/package.json`; the release
+workflow fails early if they differ. Bump that file and `ui/package.json` before tagging.
 
 > GitHub Pages must be enabled for the repository (**Settings → Pages → Build and
 > deployment → Source: GitHub Actions**) before the `pages` job can publish. To host the

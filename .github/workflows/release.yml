@@ -1,6 +1,7 @@
 name: Release
 
-# Tag a commit with `vX.Y.Z` (matching the UI version) to build and publish:
+# Tag a commit with `vX.Y.Z` (stable) or `vX.Y.Z-beta.N` (pre-release),
+# matching the UI version, to build and publish:
 #   * the docker-machine driver binary for each OS/arch (release assets)
 #   * the Rancher UI extension bundle as a tarball (release asset)
 #   * `checksums.txt`
@@ -81,6 +82,15 @@ jobs:
           corepack enable
           yarn install --network-timeout 600000
 
+      - name: Verify tag matches UI package version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./pkg/fusioncompute/package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match ui/pkg/fusioncompute/package.json version v${version}"
+            exit 1
+          fi
+
       - name: Build extension bundle
         run: bash ./scripts/build-extension.sh
 
@@ -127,6 +137,8 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
+          # v0.2.0-beta.1 etc. are published as pre-releases; v0.2.0 stays stable.
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   pages:
     name: Publish UI to GitHub Pages
@@ -141,6 +153,23 @@ jobs:
         with:
           name: ui-bundle
           path: ui-bundle
+
+      # Pages deployments replace the whole site. Restore the UI bundles from
+      # prior releases first so versioned endpoints (e.g. .../0.1.0) stay valid
+      # when publishing a new version, including pre-releases.
+      - name: Restore previously published UI versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          gh release list --exclude-drafts --limit 100 --json tagName --jq '.[].tagName' |
+          while read -r tag; do
+            gh release download "$tag" \
+              --pattern 'fusioncompute-ui-*.tar.gz' \
+              --dir "/tmp/ui-${tag}" 2>/dev/null || true
+          done
+          find /tmp -name 'fusioncompute-ui-*.tar.gz' -exec tar -C _site -xzf {} \;
 
       - name: Unpack bundle into site
         run: |
