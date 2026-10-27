@@ -19,10 +19,10 @@
 # EDIT `endpoint` to wherever you host that directory. For example:
 #
 #   GitHub Pages (published automatically by .github/workflows/release.yml):
-#     https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.2.0-beta.2
+#     https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.2.0-beta.3
 #
 #   Any static file host that can serve `ui/dist-pkg/extensions/`:
-#     https://<your-host>/extensions/fusioncompute/0.2.0-beta.2
+#     https://<your-host>/extensions/fusioncompute/0.2.0-beta.3
 #
 # Verify it resolves before applying:
 #   curl -s <endpoint>/files.txt
@@ -42,8 +42,8 @@ metadata:
 spec:
   plugin:
     name: fusioncompute
-    version: 0.2.0-beta.2
-    endpoint: https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.2.0-beta.2
+    version: 0.2.0-beta.3
+    endpoint: https://chris-ng-1987.github.io/rancher-huawei-fusioncompute-node-provider/extensions/fusioncompute/0.2.0-beta.3
     noCache: false
     noAuth: false
     metadata:
