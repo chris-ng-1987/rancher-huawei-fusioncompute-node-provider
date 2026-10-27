@@ -37,12 +37,26 @@ portGroupUrn: urn:sites:1:dvswitchs:1:portgroups:1
 # gets its own address.
 
 # --- Access ---
-# With setVmPassword=false the SSH user and the template's existing password
-# are used once to install the driver's key; leave sshPassword blank if the
-# template already trusts the key.
+# Choose ONE authentication mode:
+#
+# 1. Key-only: paste an unencrypted private key. The driver writes it to the
+#    machine store and uses it for the initial login; the template must
+#    already trust the matching public key for sshUser. No password is sent
+#    to FusionCompute. sshPrivateKey is mutually exclusive with sshPassword,
+#    setVmPassword, generatePassword, and sshKeyPath.
+sshPrivateKey: ""
+#
+# 2. Username/password (the default): with setVmPassword=false the SSH user
+#    and the template's existing password are used once to install the
+#    driver's generated key; leave sshPassword blank if the template already
+#    trusts the key. With setVmPassword=true FusionCompute resets root's
+#    password on first boot and the driver uses it once to install the key.
 setVmPassword: false
 sshUser: root
 sshPassword: ""
+# Standalone docker-machine only: path to a pre-provisioned private key on
+# the host running the driver. The template must trust the matching public
+# key. Mutually exclusive with sshPrivateKey.
 sshKeyPath: ""
 
 vmDescription: ""
