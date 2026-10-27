@@ -375,16 +375,14 @@ func (d *Driver) waitForSSH(timeout, interval time.Duration) error {
 	keyOnly := d.SSHPassword == ""
 	var cfg *gossh.ClientConfig
 	if keyOnly {
-		signer, err := d.sshSigner()
+		// Reuse libmachine's native SSH config so key parsing and host-key
+		// handling match the client Rancher itself will use.
+		nativeCfg, err := ssh.NewNativeConfig(d.GetSSHUsername(), &ssh.Auth{Keys: []string{d.GetSSHKeyPath()}})
 		if err != nil {
-			return err
+			return fmt.Errorf("fusioncompute: build SSH config for key auth: %w", err)
 		}
-		cfg = &gossh.ClientConfig{
-			User:            d.GetSSHUsername(),
-			Auth:            []gossh.AuthMethod{gossh.PublicKeys(signer)},
-			HostKeyCallback: gossh.InsecureIgnoreHostKey(),
-			Timeout:         interval,
-		}
+		nativeCfg.Timeout = interval
+		cfg = &nativeCfg
 	}
 
 	for time.Now().Before(deadline) {
@@ -410,23 +408,6 @@ func (d *Driver) waitForSSH(timeout, interval time.Duration) error {
 		return fmt.Errorf("fusioncompute: key-based SSH to %s as %q failed: %w (the template must already trust %s)", addr, d.GetSSHUsername(), last, d.publicSSHKeyPath())
 	}
 	return fmt.Errorf("fusioncompute: SSH %s not reachable: %w", addr, last)
-}
-
-// sshSigner loads and parses the private key docker-machine will use.
-func (d *Driver) sshSigner() (gossh.Signer, error) {
-	path := d.GetSSHKeyPath()
-	if path == "" {
-		return nil, fmt.Errorf("fusioncompute: no SSH key path")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("fusioncompute: read SSH private key %s: %w", path, err)
-	}
-	signer, err := gossh.ParsePrivateKey(raw)
-	if err != nil {
-		return nil, fmt.Errorf("fusioncompute: parse SSH private key %s: %w (the key must be unencrypted)", path, err)
-	}
-	return signer, nil
 }
 
 // buildCloneSpec translates our driver fields into the JSON body the
