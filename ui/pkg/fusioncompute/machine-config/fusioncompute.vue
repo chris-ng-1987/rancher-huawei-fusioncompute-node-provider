@@ -178,6 +178,7 @@ export default {
 
   async fetch() {
     this.errors = [];
+    this.authMode = this.value?.sshPrivateKey ? 'key' : 'password';
     await this.loadSchemaFields();
     await this.loadCloudOptions();
   },
@@ -187,6 +188,10 @@ export default {
       errors:              null,
       fields:              null,
       cloudCredentialKeys: [],
+      // Local UI state: the selected authentication mode must not be derived
+      // from sshPrivateKey alone, because the user selects "SSH private key"
+      // before typing the key.
+      authMode:            'password',
       authOptions:         [
         { label: 'SSH private key', value: 'key' },
         { label: 'Username and password', value: 'password' },
@@ -275,9 +280,10 @@ export default {
     },
     authMethod: {
       get() {
-        return this.value?.sshPrivateKey ? 'key' : 'password';
+        return this.authMode;
       },
       set(v) {
+        this.authMode = v;
         if (v === 'key') {
           // Key-only access: the driver must not also attempt a password
           // bootstrap or a FusionCompute password reset.
@@ -322,6 +328,14 @@ export default {
   watch: {
     'credentialId'() {
       this.$fetch();
+    },
+    // If a saved config loads its key after the initial fetch (or the field is
+    // populated externally), reflect that in the selector. Do not react to the
+    // key being cleared: switching back to password mode does that on purpose.
+    'value.sshPrivateKey'(v) {
+      if (v) {
+        this.authMode = 'key';
+      }
     },
   },
 
