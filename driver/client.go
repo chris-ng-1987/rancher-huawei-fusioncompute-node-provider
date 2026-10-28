@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/machine/libmachine/log"
+	"github.com/rancher/machine/libmachine/log"
 )
 
 // lastClonePayloadPath is where we persist the most recent clone

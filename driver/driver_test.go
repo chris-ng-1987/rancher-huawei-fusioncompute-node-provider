@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/machine/libmachine/drivers"
-	libssh "github.com/docker/machine/libmachine/ssh"
-	"github.com/docker/machine/libmachine/state"
+	"github.com/rancher/machine/libmachine/drivers"
+	libssh "github.com/rancher/machine/libmachine/ssh"
+	"github.com/rancher/machine/libmachine/state"
 )
 
 // TestBuildCloneSpec asserts that buildCloneSpec() populates the JSON
