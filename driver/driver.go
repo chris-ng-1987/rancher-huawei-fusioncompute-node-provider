@@ -29,6 +29,7 @@ type Driver struct {
 	DCSUsername string // X-Auth-User
 	DCSPassword string // X-Auth-Key
 	DCSSiteURI  string // site URI segment, e.g. "/service/sites/1"
+	VerifyTLS   bool   // verify the VRM's TLS certificate; false keeps the historical skip-verify behavior
 
 	// --- Provisioning inputs ---
 	TemplateID    string // template (or VM) ID to clone from, e.g. "i-000001BC"
@@ -146,6 +147,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "Pre-resolved site URI, e.g. /service/sites/1 (skips the sites query)",
 			EnvVar: "FUSIONCOMPUTE_DCS_SITE_URI",
 		},
+		mcnflag.BoolFlag{
+			Name:   "fusioncompute-verify-tls",
+			Usage:  "Verify the FusionCompute API server's TLS certificate; leave false for self-signed VRM certificates (default false)",
+			EnvVar: "FUSIONCOMPUTE_VERIFY_TLS",
+		},
 
 		// VM spec
 		mcnflag.StringFlag{
@@ -247,6 +253,7 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.DCSUsername = opts.String("fusioncompute-dcs-username")
 	d.DCSPassword = opts.String("fusioncompute-dcs-password")
 	d.DCSSiteURI = opts.String("fusioncompute-dcs-site-uri")
+	d.VerifyTLS = opts.Bool("fusioncompute-verify-tls")
 
 	d.TemplateID = opts.String("fusioncompute-template-id")
 	d.CPUCount = opts.Int("fusioncompute-cpu")

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/pem"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -630,6 +631,87 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 	if d.DCSHostname != "dcs.example.com" || d.DCSUsername != "admin" {
 		t.Fatalf("unmarshaled %+v", d)
+	}
+}
+
+type fakeDriverOptions map[string]interface{}
+
+func (o fakeDriverOptions) String(key string) string {
+	if v, ok := o[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func (o fakeDriverOptions) StringSlice(key string) []string {
+	if v, ok := o[key].([]string); ok {
+		return v
+	}
+	return nil
+}
+
+func (o fakeDriverOptions) Int(key string) int {
+	if v, ok := o[key].(int); ok {
+		return v
+	}
+	return 0
+}
+
+func (o fakeDriverOptions) Bool(key string) bool {
+	if v, ok := o[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
+// TestSetConfigFromFlagsVerifyTLS verifies the verifyTls flag is read from the
+// driver options Rancher/docker-machine pass in.
+func TestSetConfigFromFlagsVerifyTLS(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+	opts := fakeDriverOptions{
+		"fusioncompute-dcs-hostname":   "dcs.example.com",
+		"fusioncompute-dcs-username":   "admin",
+		"fusioncompute-dcs-password":   "secret",
+		"fusioncompute-template-id":    "tpl",
+		"fusioncompute-port-group-urn": "urn:pg",
+		"fusioncompute-datastore-urn":  "urn:ds",
+		"fusioncompute-verify-tls":     true,
+	}
+
+	if err := d.SetConfigFromFlags(opts); err != nil {
+		t.Fatalf("SetConfigFromFlags: %v", err)
+	}
+	if !d.VerifyTLS {
+		t.Fatal("fusioncompute-verify-tls=true was not applied")
+	}
+}
+
+// TestNewClientTLSVerification covers the verifyTls option: the historical
+// default skips verification for self-signed VRMs, while verifyTls=true
+// enforces the certificate chain.
+func TestNewClientTLSVerification(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+
+	c, err := d.newClient()
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	tr, ok := c.hc.Transport.(*http.Transport)
+	if !ok || tr.TLSClientConfig == nil {
+		t.Fatalf("expected an *http.Transport with a TLS config, got %#v", c.hc.Transport)
+	}
+	if !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("verifyTls=false must skip certificate verification (historical default)")
+	}
+
+	d.VerifyTLS = true
+	c, err = d.newClient()
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	tr = c.hc.Transport.(*http.Transport)
+	if tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("verifyTls=true must enforce certificate verification")
 	}
 }
 

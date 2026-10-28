@@ -16,9 +16,9 @@ metadata:
     lifecycle.cattle.io/create.node-driver-controller: "true"
     # Credential visibility / UI hints. Read by Rancher when rendering the
     # generic credential and machine-config forms.
-    publicCredentialFields: dcsHostname,dcsPort,dcsUsername,dcsSiteUri
+    publicCredentialFields: dcsHostname,dcsPort,dcsUsername,dcsSiteUri,verifyTls
     privateCredentialFields: dcsPassword
-    optionalCredentialFields: dcsPort,dcsSiteUri
+    optionalCredentialFields: dcsPort,dcsSiteUri,verifyTls
     passwordFields: dcsPassword,sshPassword,sshPrivateKey
     defaults: dcsPort:7443,cpu:2,memoryMb:4096,diskGb:250,sshUser:root
 spec:
