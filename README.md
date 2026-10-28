@@ -146,6 +146,39 @@ configured SSH user.
    password mode it logs in once with the bootstrap password and installs the generated
    public key.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Rancher as Rancher Server
+    participant Driver as Node Driver
+    participant VRM as FusionCompute VRM
+    participant Guest as Guest VM
+    participant Agent as RKE2 / K3s Agent
+
+    Note over Rancher,Agent: Clone
+    Rancher->>Driver: create host (machine config + credential)
+    Driver->>VRM: POST /service/session
+    VRM-->>Driver: X-Auth-Token + site
+    Driver->>VRM: POST action/clone
+    VRM-->>Driver: VM URN + task URI
+    Driver->>VRM: poll task to progress 100
+
+    Note over Rancher,Agent: Discover IP + prepare host
+    Driver->>VRM: GET vmURI and read NIC IP
+    Guest->>VRM: VM-Agent reports IP
+    VRM-->>Driver: IP status ready
+    Driver->>Guest: wait for sshd on 22
+    Driver->>Guest: install SSH public key
+    Driver->>Rancher: host created
+
+    Note over Rancher,Agent: Node init
+    Rancher->>Guest: run node init script (SSH)
+    Guest->>Agent: install RKE2 / K3s agent
+    Agent->>Rancher: register node (bootstrap token)
+    Rancher->>Agent: assign roles
+    Agent->>Rancher: node Ready
+```
+
 It also implements `Remove`, `Start`, `Stop`, `Restart`, `Kill`, and `GetState`, so the
 host's lifecycle is managed with `docker-machine stop/start/rm` (and the equivalent
 Rancher actions).
