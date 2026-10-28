@@ -29,12 +29,12 @@ spec:
   # EDIT THIS: point at the driver binary. Tagged releases publish one asset
   # per OS/arch; pick the one matching the host that runs Rancher (normally
   # linux/amd64), e.g.
-  #   https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.3/docker-machine-driver-fusioncompute_linux_amd64
-  url: https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.3/docker-machine-driver-fusioncompute_linux_amd64
+  #   https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.4/docker-machine-driver-fusioncompute_linux_amd64
+  url: https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.4/docker-machine-driver-fusioncompute_linux_amd64
   # sha256 of the binary above, taken from the release's `checksums.txt`.
-  # The value below matches the v0.2.0-beta.3 linux/amd64 asset; update it if
+  # The value below matches the v0.2.0-beta.4 linux/amd64 asset; update it if
   # you change `url`.
-  checksum: d909f5bbd85ef14f628d14860896197415e98cc8f349b34973416fbdf90c3a95
+  checksum: 5172c893d900863142c591c81719df55b31c7b2a272d1e3a47666d03d6fc02ce
   #
   # whitelistDomains — optional host allow-list consulted by older Rancher
   # releases. Rancher 2.15+ uses `ProxyEndpoint` CRs for the live dropdowns
