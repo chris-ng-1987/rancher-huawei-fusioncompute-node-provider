@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/machine/libmachine/drivers"
-	"github.com/docker/machine/libmachine/mcnflag"
-	"github.com/docker/machine/libmachine/state"
+	"github.com/rancher/machine/libmachine/drivers"
+	"github.com/rancher/machine/libmachine/mcnflag"
+	"github.com/rancher/machine/libmachine/state"
 )
 
 // Driver implements the docker-machine Driver interface for Huawei

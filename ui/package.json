@@ -8,11 +8,21 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@rancher/shell": "3.0.13",
+    "@rancher/shell": "3.0.14",
     "cache-loader": "4.1.0",
     "color": "4.2.3",
-    "ip": "2.0.1",
     "node-polyfill-webpack-plugin": "3.0.0"
+  },
+  "resolutions": {
+    "body-parser": "1.20.9",
+    "dompurify": "3.4.17",
+    "linkify-it": "5.0.2",
+    "markdown-it": "14.3.3",
+    "postcss": "8.5.30",
+    "**/simple-update-notifier/semver": "7.8.5",
+    "serialize-javascript": "7.1.4",
+    "webpack-dev-middleware": "7.4.6",
+    "zod": "4.6.7"
   },
   "scripts": {
     "dev": "NODE_ENV=dev ./node_modules/.bin/vue-cli-service serve",

@@ -190,7 +190,7 @@ Rancher actions).
 
 ## Build
 
-Requirements: **Go 1.25+** for the driver and **Node 24** for the UI.
+Requirements: **Go 1.26+** for the driver and **Node 24** for the UI.
 
 ### Driver binary only
 
