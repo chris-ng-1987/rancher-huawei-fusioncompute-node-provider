@@ -11,7 +11,7 @@
  * `spec.routes[].domain`). Requests also fail if Rancher does not trust the
  * VRM's TLS certificate — Rancher's proxy verifies it and offers no
  * skip-verify option, unlike the Go driver, where the cloud credential's
- * `verifyTls` checkbox controls certificate verification.
+ * `skipTlsVerify` checkbox opts out of certificate verification.
  *
  * Auth mirrors the Go driver (client.go): POST /service/session with
  * X-Auth-User / X-Auth-Key, read X-Auth-Token from the response headers,

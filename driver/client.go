@@ -242,12 +242,11 @@ type NICSpecification struct {
 }
 
 // newClient builds an http.Client for the FusionCompute API. TLS
-// verification is controlled by the credential's verifyTls option; it
-// defaults to off because FusionCompute deployments commonly use self-signed
-// VRM certificates (matching the Ansible playbook's `validate_certs: false`).
+// verification is enabled by default; skipTlsVerify is an explicit opt-out
+// for self-signed VRM certificates.
 func (d *Driver) newClient() (*fcClient, error) {
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: !d.VerifyTLS},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: d.SkipTLSVerify},
 	}
 	return &fcClient{
 		hostname: d.DCSHostname,

@@ -307,11 +307,11 @@ pre-resolved site URI — the same inputs as the driver's connection settings (s
 [flag reference](#flag-reference)). If the host already carries an explicit port it wins
 over the port setting.
 
-The form also has a **Verify the VRM's TLS certificate** checkbox. It is off by default,
-matching the driver's historical behavior and supporting self-signed VRM certificates.
-Enable it when the VRM certificate chains to a CA trusted by the host running Rancher.
-This option controls the Go driver's provisioning API calls only; Rancher's meta proxy
-(used for the live dropdowns) always verifies the certificate.
+The form also has a **Skip TLS certificate verification** checkbox. It is off by default,
+so the driver verifies the VRM certificate against the trust store on the host running
+Rancher. Enable it only for self-signed VRM certificates. This option controls the Go
+driver's provisioning API calls only; Rancher's meta proxy (used for the live dropdowns)
+always verifies the certificate.
 
 ### 3. Live dropdowns
 
@@ -336,8 +336,8 @@ allow-lists / the global `whitelist-domains` setting, so keep the VRM in
 
 **b. Rancher must trust the VRM's TLS certificate (and the cert must name the host you
 dial).** Rancher's proxy always verifies the upstream certificate and has no skip-verify
-option, even if the credential's `verifyTls` option is off for the Go driver. A factory
-VRM serves a self-signed certificate whose CN/SAN are the generated `vrmcaserver<hex>`
+option, even if the credential's `skipTlsVerify` option is enabled for the Go driver. A
+factory VRM serves a self-signed certificate whose CN/SAN are the generated `vrmcaserver<hex>`
 name, so a ProxyEndpoint request fails first on trust and then on
 `no alternative certificate subject name matches target hostname`.
 
@@ -455,7 +455,7 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-dcs-username`        | `FUSIONCOMPUTE_DCS_USERNAME`  | yes      | `X-Auth-User`                                |
 | `--fusioncompute-dcs-password`        | `FUSIONCOMPUTE_DCS_PASSWORD`  | yes      | `X-Auth-Key`                                 |
 | `--fusioncompute-dcs-site-uri`        | `FUSIONCOMPUTE_DCS_SITE_URI`  | no       | Skip sites query if you already know it      |
-| `--fusioncompute-verify-tls`          | `FUSIONCOMPUTE_VERIFY_TLS`    | no       | Verify the VRM's TLS certificate (default `false`: skip verification for self-signed certificates) |
+| `--fusioncompute-skip-tls-verify`     | `FUSIONCOMPUTE_SKIP_TLS_VERIFY`| no      | Skip VRM TLS certificate verification (default `false`: verify the certificate; enable only for self-signed certificates) |
 | `--fusioncompute-template-id`         | `FUSIONCOMPUTE_TEMPLATE_ID`   | yes      | Template (or source VM) ID to clone from     |
 | `--fusioncompute-cpu`                 | `FUSIONCOMPUTE_CPU`           | no       | vCPU count (default `2`)                     |
 | `--fusioncompute-memory-mb`           | `FUSIONCOMPUTE_MEMORY_MB`     | no       | RAM in MB (default `4096`)                   |

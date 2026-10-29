@@ -30,13 +30,13 @@ When loaded, the extension renders the machine-pool form grouped into sections:
   uses (`vmDescription`, etc.).
 
 The extension also provides the **Cloud Credential** form (`cloud-credential/fusioncompute.vue`):
-VRM host/port, username/password, optional site URI, and a **Verify the VRM's TLS
-certificate** checkbox. `verifyTls` is off by default (self-signed VRM certificates keep
-working) and only controls the Go driver's provisioning API calls; Rancher's meta proxy
-still verifies the certificate for the live dropdowns.
+VRM host/port, username/password, optional site URI, and a **Skip TLS certificate
+verification** checkbox. Verification is on by default; `skipTlsVerify` opts out for
+self-signed VRMs and only controls the Go driver's provisioning API calls. Rancher's meta
+proxy still verifies the certificate for the live dropdowns.
 
 Cloud-credential fields (`dcsHostname`, `dcsPort`, `dcsUsername`, `dcsPassword`,
-`dcsSiteUri`, `verifyTls`) are excluded so they aren't duplicated. `sshPort` is hidden
+`dcsSiteUri`, `skipTlsVerify`) are excluded so they aren't duplicated. `sshPort` is hidden
 because SSH is always on port 22, and `sshKeyPath` is hidden because the Rancher UI
 provides `sshPrivateKey` instead of a server-local path. Standalone docker-machine users
 can still set `--fusioncompute-ssh-key-path`.
@@ -171,12 +171,12 @@ and the cloud credential's `dcsHostname`.
 ### Required: Rancher must trust the VRM's TLS certificate
 
 Rancher's proxy verifies the upstream certificate and has no skip-verify option (unlike
-the Go driver, where the cloud credential's `verifyTls` checkbox controls verification).
-A VRM with a self-signed certificate fails with a TLS trust error, and the certificate
-must also name the host you dial (a factory VRM's generated `vrmcaserver<hex>` name does
-not match). Either re-issue the VRM certificate
-with the DNS name in its SAN, or put a TLS-terminating reverse proxy in front of the VRM
-and use that name as the credential's host.
+the Go driver, where the cloud credential's `skipTlsVerify` checkbox opts out). A VRM
+with a self-signed certificate fails with a TLS trust error, and the certificate must
+also name the host you dial (a factory VRM's generated `vrmcaserver<hex>` name does not
+match). Either re-issue the VRM certificate with the DNS name in its SAN, or put a
+TLS-terminating reverse proxy in front of the VRM and use that name as the credential's
+host.
 
 If you need to install a CA in Rancher, drop it where the container's TLS stack reads it.
 In `rancher/rancher` the image sets `SSL_CERT_DIR=/etc/rancher/ssl`, and Go reads every

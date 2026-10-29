@@ -4,7 +4,7 @@
 // Rancher uses this component instead of the generic key/value form because
 // it is registered under cloud-credential/fusioncompute.vue. The VRM
 // connection fields are the same ones the machine-config form reads for the
-// live dropdowns; verifyTls controls the Go driver's API TLS verification.
+// live dropdowns; skipTlsVerify opts out of the Go driver's API TLS verification.
 import CreateEditView from '@shell/mixins/create-edit-view';
 import FormValidation from '@shell/mixins/form-validation';
 import { Checkbox } from '@components/Form/Checkbox';
@@ -32,12 +32,12 @@ export default {
   },
 
   computed: {
-    verifyTls: {
+    skipTlsVerify: {
       get() {
-        return isTrue(this.value?.decodedData?.verifyTls);
+        return isTrue(this.value?.decodedData?.skipTlsVerify);
       },
       set(value) {
-        this.$emit('valueChanged', 'verifyTls', !!value);
+        this.$emit('valueChanged', 'skipTlsVerify', !!value);
       },
     },
   },
@@ -114,16 +114,15 @@ export default {
     <div class="row mb-10">
       <div class="col span-12">
         <Checkbox
-          v-model:value="verifyTls"
+          v-model:value="skipTlsVerify"
           :mode="mode"
-          label="Verify the VRM's TLS certificate"
+          label="Skip TLS certificate verification"
         />
         <p class="text-muted mt-5">
-          Leave unchecked for self-signed certificates (the historical default). Enable it to
-          validate the certificate against the trust store on the host running Rancher. This
-          only affects the driver's provisioning API calls; Rancher's meta proxy always
-          verifies the certificate for the live Template/Datastore/Cluster/Port Group
-          dropdowns.
+          Verification is enabled by default. Check this only for self-signed VRM
+          certificates; the driver will then accept any certificate from the VRM. This only
+          affects the driver's provisioning API calls; Rancher's meta proxy always verifies
+          the certificate for the live Template/Datastore/Cluster/Port Group dropdowns.
         </p>
       </div>
     </div>

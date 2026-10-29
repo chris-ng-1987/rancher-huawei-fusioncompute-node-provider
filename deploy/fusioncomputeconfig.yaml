@@ -24,9 +24,9 @@ dcsPort: "7443"
 dcsUsername: admin
 dcsPassword: ""
 dcsSiteUri: ""
-# Verify the VRM's TLS certificate. Leave false for self-signed certificates;
-# this is also exposed as a checkbox on the Cloud Credential form.
-verifyTls: false
+# Certificate verification is on by default. Set true only for self-signed
+# VRM certificates; this is also exposed as a checkbox on the Cloud Credential form.
+skipTlsVerify: false
 
 # --- Placement ---
 # templateId is the bare VM id of the template to clone, e.g. i-00000001.
