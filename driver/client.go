@@ -241,12 +241,12 @@ type NICSpecification struct {
 	SequenceNum int `json:"sequenceNum"`
 }
 
-// newClient builds an http.Client that skips TLS verification — matching
-// the Ansible playbook's `validate_certs: false` — and returns a fcClient
-// ready for auth.
+// newClient builds an http.Client for the FusionCompute API. TLS
+// verification is enabled by default; skipTlsVerify is an explicit opt-out
+// for self-signed VRM certificates.
 func (d *Driver) newClient() (*fcClient, error) {
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: d.SkipTLSVerify},
 	}
 	return &fcClient{
 		hostname: d.DCSHostname,

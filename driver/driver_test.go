@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"encoding/pem"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/rancher/machine/libmachine/drivers"
+	"github.com/rancher/machine/libmachine/mcnflag"
 	libssh "github.com/rancher/machine/libmachine/ssh"
 	"github.com/rancher/machine/libmachine/state"
 )
@@ -630,6 +632,122 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 	if d.DCSHostname != "dcs.example.com" || d.DCSUsername != "admin" {
 		t.Fatalf("unmarshaled %+v", d)
+	}
+	if d.SkipTLSVerify {
+		t.Fatal("legacy configs without skipTlsVerify must verify by default")
+	}
+}
+
+type fakeDriverOptions map[string]interface{}
+
+func (o fakeDriverOptions) String(key string) string {
+	if v, ok := o[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func (o fakeDriverOptions) StringSlice(key string) []string {
+	if v, ok := o[key].([]string); ok {
+		return v
+	}
+	return nil
+}
+
+func (o fakeDriverOptions) Int(key string) int {
+	if v, ok := o[key].(int); ok {
+		return v
+	}
+	return 0
+}
+
+func (o fakeDriverOptions) Bool(key string) bool {
+	if v, ok := o[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
+// TestSetConfigFromFlagsSkipTLSVerify verifies the skipTlsVerify flag is read
+// from the driver options Rancher/docker-machine pass in.
+func TestSetConfigFromFlagsSkipTLSVerify(t *testing.T) {
+	base := func() fakeDriverOptions {
+		return fakeDriverOptions{
+			"fusioncompute-dcs-hostname":   "dcs.example.com",
+			"fusioncompute-dcs-username":   "admin",
+			"fusioncompute-dcs-password":   "secret",
+			"fusioncompute-template-id":    "tpl",
+			"fusioncompute-port-group-urn": "urn:pg",
+			"fusioncompute-datastore-urn":  "urn:ds",
+		}
+	}
+
+	t.Run("default verifies", func(t *testing.T) {
+		d := NewDriver("n", "/tmp")
+
+		if err := d.SetConfigFromFlags(base()); err != nil {
+			t.Fatalf("SetConfigFromFlags: %v", err)
+		}
+		if d.SkipTLSVerify {
+			t.Fatal("verification must be enabled when skipTlsVerify is not set")
+		}
+	})
+
+	t.Run("skip enabled", func(t *testing.T) {
+		d := NewDriver("n", "/tmp")
+		opts := base()
+		opts["fusioncompute-skip-tls-verify"] = true
+
+		if err := d.SetConfigFromFlags(opts); err != nil {
+			t.Fatalf("SetConfigFromFlags: %v", err)
+		}
+		if !d.SkipTLSVerify {
+			t.Fatal("fusioncompute-skip-tls-verify=true was not applied")
+		}
+	})
+}
+
+// TestSkipTLSVerifyFlagDefault verifies the flag exists and defaults to false,
+// meaning certificate verification is on unless explicitly disabled.
+func TestSkipTLSVerifyFlagDefault(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+
+	for _, flag := range d.GetCreateFlags() {
+		if f, ok := flag.(mcnflag.BoolFlag); ok && f.Name == "fusioncompute-skip-tls-verify" {
+			if got, ok := f.Default().(bool); !ok || got {
+				t.Fatalf("fusioncompute-skip-tls-verify default = %#v, want false", f.Default())
+			}
+			return
+		}
+	}
+	t.Fatal("fusioncompute-skip-tls-verify flag not found")
+}
+
+// TestNewClientTLSVerification covers skipTlsVerify: verification is enabled
+// by default, and skipTlsVerify=true opts out for self-signed VRMs.
+func TestNewClientTLSVerification(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+
+	c, err := d.newClient()
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	tr, ok := c.hc.Transport.(*http.Transport)
+	if !ok || tr.TLSClientConfig == nil {
+		t.Fatalf("expected an *http.Transport with a TLS config, got %#v", c.hc.Transport)
+	}
+	if tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("default must verify the VRM certificate")
+	}
+
+	d.SkipTLSVerify = true
+	c, err = d.newClient()
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	tr = c.hc.Transport.(*http.Transport)
+	if !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("skipTlsVerify=true must skip certificate verification")
 	}
 }
 

@@ -24,11 +24,12 @@ type Driver struct {
 	*drivers.BaseDriver
 
 	// --- FusionCompute connection ---
-	DCSHostname string // e.g. "dcs.example.com"  -> https://<host>/service/...
-	DCSPort     int    // TCP port for the API; defaults to 7443 if DCSHostname has no :port
-	DCSUsername string // X-Auth-User
-	DCSPassword string // X-Auth-Key
-	DCSSiteURI  string // site URI segment, e.g. "/service/sites/1"
+	DCSHostname   string // e.g. "dcs.example.com"  -> https://<host>/service/...
+	DCSPort       int    // TCP port for the API; defaults to 7443 if DCSHostname has no :port
+	DCSUsername   string // X-Auth-User
+	DCSPassword   string // X-Auth-Key
+	DCSSiteURI    string // site URI segment, e.g. "/service/sites/1"
+	SkipTLSVerify bool   // skip VRM certificate verification; only for self-signed certificates
 
 	// --- Provisioning inputs ---
 	TemplateID    string // template (or VM) ID to clone from, e.g. "i-000001BC"
@@ -146,6 +147,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "Pre-resolved site URI, e.g. /service/sites/1 (skips the sites query)",
 			EnvVar: "FUSIONCOMPUTE_DCS_SITE_URI",
 		},
+		mcnflag.BoolFlag{
+			Name:   "fusioncompute-skip-tls-verify",
+			Usage:  "Skip TLS certificate verification for the FusionCompute API; only needed for self-signed VRM certificates (default false: verify the certificate)",
+			EnvVar: "FUSIONCOMPUTE_SKIP_TLS_VERIFY",
+		},
 
 		// VM spec
 		mcnflag.StringFlag{
@@ -247,6 +253,7 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.DCSUsername = opts.String("fusioncompute-dcs-username")
 	d.DCSPassword = opts.String("fusioncompute-dcs-password")
 	d.DCSSiteURI = opts.String("fusioncompute-dcs-site-uri")
+	d.SkipTLSVerify = opts.Bool("fusioncompute-skip-tls-verify")
 
 	d.TemplateID = opts.String("fusioncompute-template-id")
 	d.CPUCount = opts.Int("fusioncompute-cpu")
