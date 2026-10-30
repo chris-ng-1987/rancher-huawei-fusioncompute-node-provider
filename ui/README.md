@@ -5,7 +5,8 @@ Rancher UI extension for the `docker-machine-driver-fusioncompute` node driver
 
 When loaded, the extension renders the machine-pool form grouped into sections:
 
-- **Machine** — `cpu`, `memoryMb`, `diskGb` (numeric `UnitInput`s).
+- **Machine** — `cpu`, `memoryMb`, `diskGb` (numeric `UnitInput`s) and `vmDescription`
+  (the description shown on the cloned VM).
 - **Placement** — `templateId`, `datastoreUrn`, `location` (live `LabeledSelect`s).
 - **Network** — `portGroupUrn` (live `LabeledSelect`); the guest NIC always uses DHCP.
 - **Access** — choose an **Authentication** method:
@@ -27,7 +28,7 @@ When loaded, the extension renders the machine-pool form grouped into sections:
   driver forces the SSH user to root for the key install and later logins. Selecting the
   username/password mode clears `sshPrivateKey`.
 - **Advanced** — everything else via the same `<Questions>` renderer the generic form
-  uses (`vmDescription`, etc.).
+  uses (`keepFailedVm`, etc.).
 
 The extension also provides the **Cloud Credential** form (`cloud-credential/fusioncompute.vue`):
 VRM host/port, username/password, optional site URI, and a **Skip TLS certificate

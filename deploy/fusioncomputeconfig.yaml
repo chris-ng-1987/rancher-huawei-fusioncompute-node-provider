@@ -62,4 +62,5 @@ sshPassword: ""
 # key. Mutually exclusive with sshPrivateKey.
 sshKeyPath: ""
 
-vmDescription: ""
+# Description shown on the cloned VM. Empty falls back to the driver default.
+vmDescription: "Provisioned by docker-machine-driver-fusioncompute"

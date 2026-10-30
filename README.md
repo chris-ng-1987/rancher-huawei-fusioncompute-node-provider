@@ -464,7 +464,7 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-port-group-urn`      | `FUSIONCOMPUTE_PORT_GROUP_URN`| yes      | NIC port-group URN                           |
 | `--fusioncompute-datastore-urn`       | `FUSIONCOMPUTE_DATASTORE_URN` | yes      | Destination datastore URN                    |
 | `--fusioncompute-location`            | `FUSIONCOMPUTE_LOCATION`      | no       | FusionCompute location (cluster) URN         |
-| `--fusioncompute-vm-description`      | `FUSIONCOMPUTE_VM_DESCRIPTION`| no       | Description string for the new VM            |
+| `--fusioncompute-vm-description`      | `FUSIONCOMPUTE_VM_DESCRIPTION`| no       | Description shown on the cloned VM (default `Provisioned by docker-machine-driver-fusioncompute`) |
 | `--fusioncompute-ssh-user`            | `FUSIONCOMPUTE_SSH_USER`      | no       | OS user docker-machine SSHes in as (default `root`) |
 | `--fusioncompute-ssh-private-key`     | `FUSIONCOMPUTE_SSH_PRIVATE_KEY`| no      | Unencrypted private key contents for key-only initial access; template must already trust the matching public key. Mutually exclusive with the password/reset and key-path options |
 | `--fusioncompute-ssh-key-path`        | `FUSIONCOMPUTE_SSH_KEY_PATH`  | no       | Path to a pre-provisioned private key on the host running the driver; template must already trust the matching public key. Mutually exclusive with `--fusioncompute-ssh-private-key` |
