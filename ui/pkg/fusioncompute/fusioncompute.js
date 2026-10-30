@@ -49,14 +49,32 @@ function parseEndpoint(raw, fallbackPort) {
 
 // FC returns site / dvswitch URIs as "/service/sites/1". Tolerate a value
 // missing the /service prefix so a hand-entered dcsSiteUri still works.
+// Trim slashes in one pass: a backtracking regex on user input can be
+// polynomial on strings with many slashes.
 function normalizeServiceUri(uri) {
-  const s = String(uri || '').trim().replace(/\/+$/, '');
+  const s = String(uri || '').trim();
+  let end = s.length;
 
-  if (!s) {
-    return '';
+  while (end > 0 && s[end - 1] === '/') {
+    end--;
   }
 
-  return s.startsWith('/service/') ? s : `/service/${ s.replace(/^\/+/, '') }`;
+  const trimmed = s.slice(0, end);
+
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.startsWith('/service/')) {
+    return trimmed;
+  }
+
+  let start = 0;
+
+  while (start < trimmed.length && trimmed[start] === '/') {
+    start++;
+  }
+
+  return `/service/${ trimmed.slice(start) }`;
 }
 
 // FC returns both `urn` (urn:sites:1:vms:i-0001) and `uri`
