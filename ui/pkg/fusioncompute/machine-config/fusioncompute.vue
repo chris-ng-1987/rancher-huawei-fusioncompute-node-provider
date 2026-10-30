@@ -434,7 +434,7 @@ export default {
         secretErr = e?.message || String(e);
       }
 
-      if (['dcsHostname', 'dcsUsername', 'dcsPassword'].some((f) => !fields[f])) {
+      if (['dcsHostname', 'dcsUsername', 'dcsPassword', 'dcsSiteUri'].some((f) => !fields[f])) {
         try {
           const credential = await this.$store.dispatch('rancher/find', { type: NORMAN.CLOUD_CREDENTIAL, id: this.credentialId });
 
@@ -448,7 +448,7 @@ export default {
         }
       }
 
-      const missing = ['dcsHostname', 'dcsUsername', 'dcsPassword'].filter((f) => !fields[f]);
+      const missing = ['dcsHostname', 'dcsUsername', 'dcsPassword', 'dcsSiteUri'].filter((f) => !fields[f]);
 
       if (missing.length) {
         this.listError = [

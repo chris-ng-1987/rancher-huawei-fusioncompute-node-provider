@@ -46,9 +46,8 @@ type fcClient struct {
 	username string
 	password string
 
-	// siteURI is "/service/sites/<id>" or the full path returned by the
-	// sites endpoint, e.g. "/service/sites/1". Resolved lazily on first
-	// call to ensureSite().
+	// siteURI is the required "/service/sites/<id>" path. The operator
+	// chooses the site; there is no auto-discovery.
 	siteURI string
 
 	token string // X-Auth-Token returned by /service/session
@@ -261,7 +260,7 @@ func (d *Driver) newClient() (*fcClient, error) {
 	}, nil
 }
 
-// baseURL is the root used for both auth and site resolution.
+// baseURL is the root used for authentication and absolute paths.
 func (c *fcClient) baseURL() string {
 	return "https://" + c.hostPort() + "/service"
 }
@@ -378,47 +377,13 @@ func (c *fcClient) auth() error {
 	return nil
 }
 
-// ensureSite resolves the site URI if not pre-supplied by listing the
-// available sites and taking the first.
+// ensureSite verifies the operator supplied a site URI. FusionCompute does
+// not auto-discover the target site; every site-scoped call needs an explicit
+// choice so a multi-site account cannot be provisioned into the wrong site.
 func (c *fcClient) ensureSite() error {
-	if c.siteURI != "" {
-		return nil
+	if c.siteURI == "" {
+		return errors.New("fusioncompute: site URI is required (set dcsSiteUri / --fusioncompute-dcs-site-uri, e.g. /service/sites/1)")
 	}
-	if err := c.auth(); err != nil {
-		return err
-	}
-	req, err := http.NewRequest(http.MethodGet, c.baseURL()+"/sites", nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", fcAPIVersion)
-	req.Header.Set("Accept-Language", fcLang)
-	req.Header.Set("X-Auth-Token", c.token)
-
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("fusioncompute list sites: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("fusioncompute list sites: status=%d body=%s", resp.StatusCode, string(body))
-	}
-
-	// Response shape: { "sites": [ { "uri": "/service/sites/1", "name": "..." } ] }
-	var out struct {
-		Sites []struct {
-			URI  string `json:"uri"`
-			Name string `json:"name"`
-		} `json:"sites"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return fmt.Errorf("fusioncompute list sites: decode: %w (body=%s)", err, string(body))
-	}
-	if len(out.Sites) == 0 {
-		return errors.New("fusioncompute list sites: no sites returned")
-	}
-	c.siteURI = out.Sites[0].URI
 	return nil
 }
 

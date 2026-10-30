@@ -153,7 +153,7 @@ func (d *Driver) alignResetSSHUser() {
 // the Ansible playbook the reference provisioning workflow:
 //
 //  1. authenticate against /service/session
-//  2. resolve the site URI
+//  2. verify the operator-supplied site URI
 //  3. POST /vms/{template}/action/clone with cpu/memory/disk/NIC/IP
 //  4. poll the returned task URI until progress==100 & status==success
 //  5. capture the VM URN so later operations can find the host

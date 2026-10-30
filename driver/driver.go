@@ -28,7 +28,7 @@ type Driver struct {
 	DCSPort       int    // TCP port for the API; defaults to 7443 if DCSHostname has no :port
 	DCSUsername   string // X-Auth-User
 	DCSPassword   string // X-Auth-Key
-	DCSSiteURI    string // site URI segment, e.g. "/service/sites/1"
+	DCSSiteURI    string // required site URI, e.g. "/service/sites/1"
 	SkipTLSVerify bool   // skip VRM certificate verification; only for self-signed certificates
 
 	// --- Provisioning inputs ---
@@ -93,6 +93,30 @@ const DefaultSSHPort = 22
 // --fusioncompute-vm-description.
 const defaultVMDescription = "Provisioned by docker-machine-driver-fusioncompute"
 
+// normalizeSiteURI converts an operator-supplied site path to the canonical
+// /service/sites/<id> form. Invalid values are returned empty so validate()
+// can reject them.
+func normalizeSiteURI(raw string) string {
+	s := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if s == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "/service/sites/") {
+		id := strings.TrimPrefix(s, "/service/sites/")
+		if id == "" || strings.Contains(id, "/") {
+			return ""
+		}
+		return s
+	}
+	s = strings.TrimLeft(s, "/")
+	s = strings.TrimPrefix(s, "service/sites/")
+	s = strings.TrimPrefix(s, "sites/")
+	if s == "" || strings.Contains(s, "/") {
+		return ""
+	}
+	return "/service/sites/" + s
+}
+
 // NewDriver returns a fresh Driver with sensible defaults. It is
 // registered with docker-machine via plugin.RegisterDriver in main.go.
 //
@@ -148,7 +172,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		},
 		mcnflag.StringFlag{
 			Name:   "fusioncompute-dcs-site-uri",
-			Usage:  "Pre-resolved site URI, e.g. /service/sites/1 (skips the sites query)",
+			Usage:  "FusionCompute site URI, e.g. /service/sites/1 (required; no auto-discovery)",
 			EnvVar: "FUSIONCOMPUTE_DCS_SITE_URI",
 		},
 		mcnflag.BoolFlag{
@@ -257,7 +281,7 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.DCSPort = opts.Int("fusioncompute-dcs-port")
 	d.DCSUsername = opts.String("fusioncompute-dcs-username")
 	d.DCSPassword = opts.String("fusioncompute-dcs-password")
-	d.DCSSiteURI = opts.String("fusioncompute-dcs-site-uri")
+	d.DCSSiteURI = normalizeSiteURI(opts.String("fusioncompute-dcs-site-uri"))
 	d.SkipTLSVerify = opts.Bool("fusioncompute-skip-tls-verify")
 
 	d.TemplateID = opts.String("fusioncompute-template-id")
@@ -336,6 +360,9 @@ func (d *Driver) validate() error {
 	if d.DCSPassword == "" {
 		missing = append(missing, "fusioncompute-dcs-password")
 	}
+	if d.DCSSiteURI == "" {
+		missing = append(missing, "fusioncompute-dcs-site-uri")
+	}
 	if d.TemplateID == "" {
 		missing = append(missing, "fusioncompute-template-id")
 	}
@@ -347,6 +374,11 @@ func (d *Driver) validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("fusioncompute driver: missing required flags: %v", missing)
+	}
+
+	siteID := strings.TrimPrefix(d.DCSSiteURI, "/service/sites/")
+	if !strings.HasPrefix(d.DCSSiteURI, "/service/sites/") || siteID == "" || strings.Contains(siteID, "/") {
+		return fmt.Errorf("fusioncompute driver: site URI (dcsSiteUri / --fusioncompute-dcs-site-uri) must look like /service/sites/<id>")
 	}
 
 	// SSH auth modes are mutually exclusive. A supplied private key is used

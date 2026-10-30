@@ -27,6 +27,7 @@ export default {
         { path: 'decodedData.dcsHostname', rules: ['required'] },
         { path: 'decodedData.dcsUsername', rules: ['required'] },
         { path: 'decodedData.dcsPassword', rules: ['required'] },
+        { path: 'decodedData.dcsSiteUri', rules: ['required'] },
       ],
     };
   },
@@ -103,11 +104,17 @@ export default {
       <div class="col span-12">
         <LabeledInput
           :value="value.decodedData.dcsSiteUri"
-          label="Site URI (optional)"
+          label="Site URI"
           placeholder="/service/sites/1"
+          :required="true"
           :mode="mode"
+          :rules="fvGetAndReportPathRules('decodedData.dcsSiteUri')"
           @update:value="$emit('valueChanged', 'dcsSiteUri', $event)"
         />
+        <p class="text-muted mt-5">
+          Required. Use the FusionCompute site URI, e.g. /service/sites/1. The driver
+          does not auto-discover the site.
+        </p>
       </div>
     </div>
 

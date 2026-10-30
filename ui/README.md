@@ -31,10 +31,11 @@ When loaded, the extension renders the machine-pool form grouped into sections:
   uses (`keepFailedVm`, etc.).
 
 The extension also provides the **Cloud Credential** form (`cloud-credential/fusioncompute.vue`):
-VRM host/port, username/password, optional site URI, and a **Skip TLS certificate
-verification** checkbox. Verification is on by default; `skipTlsVerify` opts out for
-self-signed VRMs and only controls the Go driver's provisioning API calls. Rancher's meta
-proxy still verifies the certificate for the live dropdowns.
+VRM host/port, username/password, required site URI (`/service/sites/<id>`; the driver
+does not auto-discover it), and a **Skip TLS certificate verification** checkbox.
+Verification is on by default; `skipTlsVerify` opts out for self-signed VRMs and only
+controls the Go driver's provisioning API calls. Rancher's meta proxy still verifies the
+certificate for the live dropdowns.
 
 Cloud-credential fields (`dcsHostname`, `dcsPort`, `dcsUsername`, `dcsPassword`,
 `dcsSiteUri`, `skipTlsVerify`) are excluded so they aren't duplicated. `sshPort` is hidden
@@ -135,7 +136,7 @@ static file host and point the endpoint there.
 `LabeledSelect` and populated from the FusionCompute API at form load:
 
 1. Read the cloud credential (`rancher/find` on `NORMAN.CLOUD_CREDENTIAL`) for
-   `dcsHostname` / `dcsPort` / `dcsUsername` / `dcsSiteUri`.
+   `dcsHostname` / `dcsPort` / `dcsUsername` / `dcsSiteUri` (required; no auto-discovery).
 2. Read `dcsPassword` from the k8s Secret (`management/find` on `SECRET`, base64-decoded)
    — the credential object itself never returns it.
 3. `POST /service/session` with `X-Auth-User` / `X-Auth-Key`, read `X-Auth-Token` from the
