@@ -35,10 +35,13 @@ import FusionCompute from '../fusioncompute.js';
 
 // Fields rendered with our own widgets, so Questions must skip them. The
 // access/password fields are grouped under the Access section.
+const DEFAULT_VM_DESCRIPTION = 'Provisioned by docker-machine-driver-fusioncompute';
+
 const OVERRIDDEN_FIELDS = [
   'cpu',
   'memoryMb',
   'diskGb',
+  'vmDescription',
   'templateId',
   'datastoreUrn',
   'location',
@@ -178,6 +181,9 @@ export default {
 
   async fetch() {
     this.errors = [];
+    if (this.value && !this.value.vmDescription) {
+      this.value.vmDescription = DEFAULT_VM_DESCRIPTION;
+    }
     this.authMode = this.value?.sshPrivateKey ? 'key' : 'password';
     await this.loadSchemaFields();
     await this.loadCloudOptions();
@@ -220,6 +226,14 @@ export default {
     cpu:      intString('cpu'),
     memoryMb: intString('memoryMb'),
     diskGb:   intString('diskGb'),
+    vmDescription: {
+      get() {
+        return this.value?.vmDescription;
+      },
+      set(v) {
+        this.value.vmDescription = v;
+      },
+    },
     templateId: {
       get() {
         return this.value?.templateId;
@@ -594,6 +608,17 @@ export default {
           :min="1"
           :label="'System Disk'"
           :suffix="'GB'"
+          :disabled="disabled || busy"
+        />
+      </div>
+    </div>
+    <div class="row mt-10">
+      <div class="col span-12">
+        <LabeledInput
+          v-model:value="vmDescription"
+          :mode="mode"
+          :label="'VM description'"
+          :placeholder="'Provisioned by docker-machine-driver-fusioncompute'"
           :disabled="disabled || busy"
         />
       </div>

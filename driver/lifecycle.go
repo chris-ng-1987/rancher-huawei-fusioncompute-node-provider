@@ -430,9 +430,13 @@ func (d *Driver) buildCloneSpec() *CloneSpec {
 	if vmName == "" {
 		vmName = d.BaseDriver.MachineName
 	}
+	description := strings.TrimSpace(d.VMDescription)
+	if description == "" {
+		description = defaultVMDescription
+	}
 	spec := &CloneSpec{
 		Name:          vmName,
-		Description:   d.VMDescription,
+		Description:   description,
 		Group:         "",
 		IsBindingHost: "false",
 		Location:      d.Location,

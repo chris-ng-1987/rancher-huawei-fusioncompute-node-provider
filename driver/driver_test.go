@@ -404,6 +404,27 @@ func TestBuildCloneSpecLocationOmitted(t *testing.T) {
 	}
 }
 
+// TestBuildCloneSpecDefaultDescription verifies the clone request always
+// carries a description, even when the driver was constructed without
+// NewDriver (the plugin path).
+func TestBuildCloneSpecDefaultDescription(t *testing.T) {
+	d := &Driver{
+		VMName: "minimal",
+		// Whitespace-only descriptions fall back to the default.
+		VMDescription: "   ",
+		CPUCount:      2, MemoryMB: 4096, DiskGB: 100,
+		PortGroupURN: "urn:pg", DatastoreURN: "urn:ds",
+	}
+	buf, err := json.Marshal(d.buildCloneSpec())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	want := `"description":"` + defaultVMDescription + `"`
+	if !strings.Contains(string(buf), want) {
+		t.Errorf("clone payload missing default description %s; full payload: %s", want, buf)
+	}
+}
+
 // TestBuildCloneSpecVMNameFallback verifies that an unset VMName is
 // replaced with BaseDriver.MachineName so the cloned VM has a
 // non-empty name (FC rejects "" with errorCode 10000001). This
@@ -721,6 +742,61 @@ func TestSkipTLSVerifyFlagDefault(t *testing.T) {
 		}
 	}
 	t.Fatal("fusioncompute-skip-tls-verify flag not found")
+}
+
+// TestVMDescriptionFlagDefault verifies the VM description flag exposes the
+// driver default to the CLI (and to Rancher's generated machine config).
+func TestVMDescriptionFlagDefault(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+
+	for _, flag := range d.GetCreateFlags() {
+		if f, ok := flag.(mcnflag.StringFlag); ok && f.Name == "fusioncompute-vm-description" {
+			if f.Default() != defaultVMDescription {
+				t.Fatalf("fusioncompute-vm-description default = %#v, want %q", f.Default(), defaultVMDescription)
+			}
+			return
+		}
+	}
+	t.Fatal("fusioncompute-vm-description flag not found")
+}
+
+// TestSetConfigFromFlagsVMDescription verifies a custom description is applied
+// while an omitted value preserves the driver default.
+func TestSetConfigFromFlagsVMDescription(t *testing.T) {
+	base := func() fakeDriverOptions {
+		return fakeDriverOptions{
+			"fusioncompute-dcs-hostname":   "dcs.example.com",
+			"fusioncompute-dcs-username":   "admin",
+			"fusioncompute-dcs-password":   "secret",
+			"fusioncompute-template-id":    "tpl",
+			"fusioncompute-port-group-urn": "urn:pg",
+			"fusioncompute-datastore-urn":  "urn:ds",
+		}
+	}
+
+	t.Run("default preserved", func(t *testing.T) {
+		d := NewDriver("n", "/tmp")
+
+		if err := d.SetConfigFromFlags(base()); err != nil {
+			t.Fatalf("SetConfigFromFlags: %v", err)
+		}
+		if d.VMDescription != defaultVMDescription {
+			t.Fatalf("VMDescription = %q, want %q", d.VMDescription, defaultVMDescription)
+		}
+	})
+
+	t.Run("custom description", func(t *testing.T) {
+		d := NewDriver("n", "/tmp")
+		opts := base()
+		opts["fusioncompute-vm-description"] = "custom description"
+
+		if err := d.SetConfigFromFlags(opts); err != nil {
+			t.Fatalf("SetConfigFromFlags: %v", err)
+		}
+		if d.VMDescription != "custom description" {
+			t.Fatalf("VMDescription = %q, want %q", d.VMDescription, "custom description")
+		}
+	})
 }
 
 // TestNewClientTLSVerification covers skipTlsVerify: verification is enabled

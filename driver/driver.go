@@ -89,6 +89,10 @@ type Driver struct {
 // --fusioncompute-ssh-port flag).
 const DefaultSSHPort = 22
 
+// defaultVMDescription is shown on the cloned VM unless the operator supplies
+// --fusioncompute-vm-description.
+const defaultVMDescription = "Provisioned by docker-machine-driver-fusioncompute"
+
 // NewDriver returns a fresh Driver with sensible defaults. It is
 // registered with docker-machine via plugin.RegisterDriver in main.go.
 //
@@ -107,7 +111,7 @@ func NewDriver(hostName string, storePath string) *Driver {
 			SSHPort:     DefaultSSHPort,
 		},
 		VMName:        hostName,
-		VMDescription: "Provisioned by docker-machine-driver-fusioncompute",
+		VMDescription: defaultVMDescription,
 		CPUCount:      2,
 		MemoryMB:      4096,
 		DiskGB:        250,
@@ -194,8 +198,9 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		},
 		mcnflag.StringFlag{
 			Name:   "fusioncompute-vm-description",
-			Usage:  "Optional description string for the VM",
+			Usage:  "Description shown on the cloned VM (default: " + defaultVMDescription + ")",
 			EnvVar: "FUSIONCOMPUTE_VM_DESCRIPTION",
+			Value:  defaultVMDescription,
 		},
 
 		// SSH access — used by docker-machine *after* the VM is up to
@@ -262,7 +267,9 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.PortGroupURN = opts.String("fusioncompute-port-group-urn")
 	d.DatastoreURN = opts.String("fusioncompute-datastore-urn")
 	d.Location = opts.String("fusioncompute-location")
-	d.VMDescription = opts.String("fusioncompute-vm-description")
+	if description := opts.String("fusioncompute-vm-description"); description != "" {
+		d.VMDescription = description
+	}
 
 	d.SSHUser = opts.String("fusioncompute-ssh-user")
 	// SSH port is fixed at 22 — see DefaultSSHPort.
