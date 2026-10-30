@@ -188,16 +188,9 @@ export default class FusionCompute {
   }
 
   async ensureSite() {
-    if (this.siteUri) {
-      return this.siteUri;
+    if (!this.siteUri) {
+      throw new Error('FusionCompute: site URI is required (set dcsSiteUri, e.g. /service/sites/1)');
     }
-    const res = await this.get('/service/sites');
-    const site = (res && res.sites && res.sites[0]);
-
-    if (!site) {
-      throw new Error('FusionCompute: no sites returned');
-    }
-    this.siteUri = normalizeServiceUri(site.uri);
 
     return this.siteUri;
   }

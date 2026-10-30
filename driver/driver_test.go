@@ -221,11 +221,110 @@ func TestValidate(t *testing.T) {
 	d.DCSHostname = "dcs.example.com"
 	d.DCSUsername = "admin"
 	d.DCSPassword = "secret"
+	d.DCSSiteURI = "/service/sites/1"
 	d.TemplateID = "tpl"
 	d.PortGroupURN = "urn:pg"
 	d.DatastoreURN = "urn:ds"
 	if err := d.validate(); err != nil {
 		t.Fatalf("expected validation to pass with required fields set, got %v", err)
+	}
+}
+
+// TestValidateSiteURI verifies the site URI is required and must be a
+// canonical /service/sites/<id> path.
+func TestValidateSiteURI(t *testing.T) {
+	base := func() *Driver {
+		return &Driver{
+			DCSHostname:  "dcs.example.com",
+			DCSUsername:  "admin",
+			DCSPassword:  "secret",
+			TemplateID:   "tpl",
+			PortGroupURN: "urn:pg",
+			DatastoreURN: "urn:ds",
+		}
+	}
+
+	if err := base().validate(); err == nil {
+		t.Fatal("expected an error when the site URI is missing")
+	}
+
+	for _, uri := range []string{
+		"/sites/1",
+		"service/sites/1",
+		"/service/sites/",
+		"/service/sites/1/extra",
+		"https://vrm.example.com/service/sites/1",
+	} {
+		d := base()
+		d.DCSSiteURI = uri
+		if err := d.validate(); err == nil {
+			t.Errorf("expected %q to be rejected", uri)
+		}
+	}
+
+	d := base()
+	d.DCSSiteURI = "/service/sites/1"
+	if err := d.validate(); err != nil {
+		t.Fatalf("expected a canonical site URI to pass, got %v", err)
+	}
+}
+
+// TestNormalizeSiteURI covers the accepted operator input forms.
+func TestNormalizeSiteURI(t *testing.T) {
+	cases := map[string]string{
+		"/service/sites/1":            "/service/sites/1",
+		"/service/sites/1/":           "/service/sites/1",
+		"/sites/1":                    "/service/sites/1",
+		"sites/1":                     "/service/sites/1",
+		"service/sites/1":             "/service/sites/1",
+		"1":                           "/service/sites/1",
+		"  /service/sites/1/  ":       "/service/sites/1",
+		"":                            "",
+		"/":                           "",
+		"/service/sites/":             "",
+		"/service/sites/1/extra":      "",
+		"https://vrm/service/sites/1": "",
+	}
+
+	for input, want := range cases {
+		if got := normalizeSiteURI(input); got != want {
+			t.Errorf("normalizeSiteURI(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// TestSetConfigFromFlagsSiteURINormalization verifies the driver canonicalizes
+// a short site path before validation.
+func TestSetConfigFromFlagsSiteURINormalization(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+	opts := fakeDriverOptions{
+		"fusioncompute-dcs-hostname":   "dcs.example.com",
+		"fusioncompute-dcs-username":   "admin",
+		"fusioncompute-dcs-password":   "secret",
+		"fusioncompute-dcs-site-uri":   "/sites/1",
+		"fusioncompute-template-id":    "tpl",
+		"fusioncompute-port-group-urn": "urn:pg",
+		"fusioncompute-datastore-urn":  "urn:ds",
+	}
+
+	if err := d.SetConfigFromFlags(opts); err != nil {
+		t.Fatalf("SetConfigFromFlags: %v", err)
+	}
+	if d.DCSSiteURI != "/service/sites/1" {
+		t.Fatalf("DCSSiteURI = %q, want %q", d.DCSSiteURI, "/service/sites/1")
+	}
+}
+
+// TestEnsureSiteRequiresURI verifies the client does not auto-discover sites.
+func TestEnsureSiteRequiresURI(t *testing.T) {
+	c := &fcClient{}
+	if err := c.ensureSite(); err == nil {
+		t.Fatal("expected an error with an empty site URI")
+	}
+
+	c.siteURI = "/service/sites/1"
+	if err := c.ensureSite(); err != nil {
+		t.Fatalf("expected a supplied site URI to pass, got %v", err)
 	}
 }
 
@@ -238,6 +337,7 @@ func TestValidateSSHAuthModes(t *testing.T) {
 			DCSHostname:  "dcs.example.com",
 			DCSUsername:  "admin",
 			DCSPassword:  "secret",
+			DCSSiteURI:   "/service/sites/1",
 			TemplateID:   "tpl",
 			PortGroupURN: "urn:pg",
 			DatastoreURN: "urn:ds",
@@ -697,6 +797,7 @@ func TestSetConfigFromFlagsSkipTLSVerify(t *testing.T) {
 			"fusioncompute-dcs-hostname":   "dcs.example.com",
 			"fusioncompute-dcs-username":   "admin",
 			"fusioncompute-dcs-password":   "secret",
+			"fusioncompute-dcs-site-uri":   "/service/sites/1",
 			"fusioncompute-template-id":    "tpl",
 			"fusioncompute-port-group-urn": "urn:pg",
 			"fusioncompute-datastore-urn":  "urn:ds",
@@ -768,6 +869,7 @@ func TestSetConfigFromFlagsVMDescription(t *testing.T) {
 			"fusioncompute-dcs-hostname":   "dcs.example.com",
 			"fusioncompute-dcs-username":   "admin",
 			"fusioncompute-dcs-password":   "secret",
+			"fusioncompute-dcs-site-uri":   "/service/sites/1",
 			"fusioncompute-template-id":    "tpl",
 			"fusioncompute-port-group-urn": "urn:pg",
 			"fusioncompute-datastore-urn":  "urn:ds",

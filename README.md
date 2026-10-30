@@ -138,7 +138,7 @@ configured SSH user.
 ## How it works
 
 1. Authenticates against `/service/session` with `X-Auth-User` / `X-Auth-Key`.
-2. Resolves the FusionCompute site URI from `/service/sites` (or accepts a pre-resolved one).
+2. Uses the required FusionCompute site URI (`/service/sites/<id>`); there is no auto-discovery.
 3. POSTs a `clone` request to `{site}/vms/{template}/action/clone` with CPU, memory,
    disk, NIC, and hostname.
 4. Polls the returned async task until `progress == 100` and `status == "success"`.
@@ -303,8 +303,8 @@ dashboard it only loads the `.css` companion for provider-tile styling, not
 ### 2. Cloud credential
 
 Create a FusionCompute cloud credential (**Cluster Management → Cloud Credentials**). It
-holds the VRM connection details — host/port, username, password, and an optional
-pre-resolved site URI — the same inputs as the driver's connection settings (see the
+holds the VRM connection details — host/port, username, password, and the required site
+URI (`/service/sites/<id>`) — the same inputs as the driver's connection settings (see the
 [flag reference](#flag-reference)). If the host already carries an explicit port it wins
 over the port setting.
 
@@ -455,7 +455,7 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-dcs-port`            | `FUSIONCOMPUTE_DCS_PORT`      | no       | API TCP port (default `7443`; ignored when hostname already includes `:port`) |
 | `--fusioncompute-dcs-username`        | `FUSIONCOMPUTE_DCS_USERNAME`  | yes      | `X-Auth-User`                                |
 | `--fusioncompute-dcs-password`        | `FUSIONCOMPUTE_DCS_PASSWORD`  | yes      | `X-Auth-Key`                                 |
-| `--fusioncompute-dcs-site-uri`        | `FUSIONCOMPUTE_DCS_SITE_URI`  | no       | Skip sites query if you already know it      |
+| `--fusioncompute-dcs-site-uri`        | `FUSIONCOMPUTE_DCS_SITE_URI`  | yes      | FusionCompute site URI, e.g. `/service/sites/1` (no auto-discovery) |
 | `--fusioncompute-skip-tls-verify`     | `FUSIONCOMPUTE_SKIP_TLS_VERIFY`| no      | Skip VRM TLS certificate verification (default `false`: verify the certificate; enable only for self-signed certificates) |
 | `--fusioncompute-template-id`         | `FUSIONCOMPUTE_TEMPLATE_ID`   | yes      | Template (or source VM) ID to clone from     |
 | `--fusioncompute-cpu`                 | `FUSIONCOMPUTE_CPU`           | no       | vCPU count (default `2`)                     |

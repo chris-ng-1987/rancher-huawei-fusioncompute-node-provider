@@ -23,7 +23,8 @@ dcsHostname: vrm.example.com
 dcsPort: "7443"
 dcsUsername: admin
 dcsPassword: ""
-dcsSiteUri: ""
+# Required: the FusionCompute site URI, e.g. /service/sites/1.
+dcsSiteUri: "/service/sites/1"
 # Certificate verification is on by default. Set true only for self-signed
 # VRM certificates; this is also exposed as a checkbox on the Cloud Credential form.
 skipTlsVerify: false
