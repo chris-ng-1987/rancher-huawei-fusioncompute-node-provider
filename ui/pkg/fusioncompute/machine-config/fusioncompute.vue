@@ -51,6 +51,7 @@ const OVERRIDDEN_FIELDS = [
   'sshPassword',
   'sshPrivateKey',
   'sshUser',
+  'customScript',
 ];
 
 // Fields intentionally omitted from the form. SSH is always on port 22
@@ -331,6 +332,14 @@ export default {
       },
       set(v) {
         this.value.sshUser = v;
+      },
+    },
+    customScript: {
+      get() {
+        return this.value?.customScript;
+      },
+      set(v) {
+        this.value.customScript = v;
       },
     },
 
@@ -811,6 +820,32 @@ export default {
         </div>
       </template>
     </template>
+
+    <div class="row mt-10">
+      <div class="col span-12">
+        <h3>First-boot script</h3>
+      </div>
+    </div>
+    <div class="row mt-10">
+      <div class="col span-12">
+        <LabeledInput
+          v-model:value="customScript"
+          type="multiline"
+          :mode="mode"
+          :label="'Custom shell script (optional)'"
+          :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
+          :disabled="disabled || busy"
+        />
+      </div>
+    </div>
+    <div class="row mt-5">
+      <div class="col span-12">
+        <span class="text-muted">
+          Runs once per machine creation as root over SSH, before Rancher's RKE2/K3s node init script. It does not
+          replace that init script. Do not reboot the VM inside the script.
+        </span>
+      </div>
+    </div>
 
     <template v-if="fields">
       <div class="row mt-10">

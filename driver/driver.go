@@ -57,6 +57,15 @@ type Driver struct {
 	SetVMPassword    bool   // when true, set isUpdateVmPassword=true on clone
 	GeneratePassword bool   // when true, generate a random guest password and reset it on clone
 	KeepFailedVM     bool   // when true, do not delete the VM if Create() fails after the clone
+
+	// --- Optional first-boot custom script ---
+	//
+	// CustomScript is a shell script uploaded over SSH at the end of Create(),
+	// after the SSH key is installed and before libmachine/Rancher runs its
+	// node init script (the RKE2/K3s system-agent installer). It runs once per
+	// VM creation and does not replace the Rancher init script.
+	CustomScript string `json:"-"` // not persisted in machine state; the flag is in the machine config
+
 	// SSH auth is **key-based only** because libmachine v0.16.x
 	// hard-codes `-o PasswordAuthentication=no` and the
 	// StandardSSHClientCreator never adds passwords to the ssh.ClientConfig.
@@ -271,6 +280,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "When true, keep the cloned VM if provisioning fails after the clone (default false: the driver deletes it so failed creates do not leave orphan VMs)",
 			EnvVar: "FUSIONCOMPUTE_KEEP_FAILED_VM",
 		},
+		mcnflag.StringFlag{
+			Name:   "fusioncompute-custom-script",
+			Usage:  "Shell script to run over SSH after the VM is reachable and before Rancher's RKE2/K3s node init script. Runs once per VM creation; it does not replace the node init script",
+			EnvVar: "FUSIONCOMPUTE_CUSTOM_SCRIPT",
+		},
 	}
 }
 
@@ -304,6 +318,7 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.SetVMPassword = opts.Bool("fusioncompute-set-vm-password")
 	d.GeneratePassword = opts.Bool("fusioncompute-generate-password")
 	d.KeepFailedVM = opts.Bool("fusioncompute-keep-failed-vm")
+	d.CustomScript = opts.String("fusioncompute-custom-script")
 	d.SetSwarmConfigFromFlags(opts)
 
 	// Also surface SSH port/user/key through the BaseDriver so
