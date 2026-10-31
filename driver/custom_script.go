@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -20,21 +21,76 @@ const (
 	// customScriptOutputLimit keeps a noisy script from filling the Rancher
 	// logs (or an error message) with unbounded output.
 	customScriptOutputLimit = 4 * 1024
+
+	// Rancher's machine provision job mounts file-to-field-alias content
+	// here; see nodedriver.cattle.io/file-to-field-aliases.
+	rancherMachineFilesPath = "/path/to/machine/files"
+
+	// customScriptFilePrefix lets CLI/API callers pass a script file path
+	// explicitly without depending on Rancher's mount path.
+	customScriptFilePrefix = "file://"
+
+	// maxCustomScriptBytes bounds both inline and file-backed scripts. Scripts
+	// are sent through SSH stdin, so this is deliberately generous but finite.
+	maxCustomScriptBytes = 1 << 20
 )
 
 // customScriptContents returns the shell script to run. A blank script means
 // "do nothing".
 //
+// The value can be:
+//   - inline shell text (the default for Rancher UI/CLI usage)
+//   - a path under Rancher's machine-files mount, when the NodeDriver uses
+//     nodedriver.cattle.io/file-to-field-aliases: customScript:customScript
+//   - an explicit file:///path/to/script value
+//
 // The script is written to the remote bash process over SSH stdin, so no
 // shell interpolation is involved; quotes, `$`, and newlines are preserved.
-// The value is plain text, matching the Rancher UI textarea and the machine
-// config field. It is not a place for secrets; use a secret/URL-based
-// mechanism for confidential data.
-func (d *Driver) customScriptContents() []byte {
-	if strings.TrimSpace(d.CustomScript) == "" {
-		return nil
+// It is not a place for secrets; the machine config still contains the field.
+func (d *Driver) customScriptContents() ([]byte, error) {
+	raw := d.CustomScript
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
 	}
-	return []byte(d.CustomScript)
+
+	var (
+		script []byte
+		err    error
+	)
+
+	switch {
+	case strings.HasPrefix(raw, customScriptFilePrefix):
+		script, err = readCustomScriptFile(strings.TrimPrefix(raw, customScriptFilePrefix))
+	case strings.HasPrefix(raw, rancherMachineFilesPath+"/"):
+		script, err = readCustomScriptFile(raw)
+	default:
+		script = []byte(raw)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(script) > maxCustomScriptBytes {
+		return nil, fmt.Errorf("fusioncompute: custom script is %d bytes, maximum is %d", len(script), maxCustomScriptBytes)
+	}
+	return script, nil
+}
+
+func readCustomScriptFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("fusioncompute: stat custom script file %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("fusioncompute: custom script file %s is not a regular file", path)
+	}
+	if info.Size() > maxCustomScriptBytes {
+		return nil, fmt.Errorf("fusioncompute: custom script file %s is %d bytes, maximum is %d", path, info.Size(), maxCustomScriptBytes)
+	}
+	script, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("fusioncompute: read custom script file %s: %w", path, err)
+	}
+	return script, nil
 }
 
 // customScriptCommand returns the remote command used to execute the script.
@@ -54,7 +110,10 @@ func (d *Driver) customScriptCommand() string {
 // its node init script. A non-zero exit fails Create so Rancher does not
 // attempt to join a partially configured node.
 func (d *Driver) runCustomScript() error {
-	script := d.customScriptContents()
+	script, err := d.customScriptContents()
+	if err != nil {
+		return err
+	}
 	if len(script) == 0 {
 		return nil
 	}

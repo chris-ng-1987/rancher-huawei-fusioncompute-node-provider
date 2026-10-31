@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,19 +12,73 @@ import (
 )
 
 func TestCustomScriptContents(t *testing.T) {
-	tests := map[string]string{
-		"empty": "",
-		"plain": "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
-	}
+	t.Run("empty", func(t *testing.T) {
+		d := &Driver{}
+		got, err := d.customScriptContents()
+		if err != nil {
+			t.Fatalf("customScriptContents: %v", err)
+		}
+		if got != nil {
+			t.Fatalf("customScriptContents = %q, want nil", got)
+		}
+	})
 
-	for name, script := range tests {
-		t.Run(name, func(t *testing.T) {
-			d := &Driver{CustomScript: script}
-			if got := string(d.customScriptContents()); got != script {
-				t.Fatalf("customScriptContents = %q, want %q", got, script)
-			}
-		})
-	}
+	t.Run("inline", func(t *testing.T) {
+		script := "#!/bin/bash\ngrowpart /dev/sda 3 || true\n"
+		d := &Driver{CustomScript: script}
+		got, err := d.customScriptContents()
+		if err != nil {
+			t.Fatalf("customScriptContents: %v", err)
+		}
+		if string(got) != script {
+			t.Fatalf("customScriptContents = %q, want %q", got, script)
+		}
+	})
+
+	// A single-line script that looks like a path must not be mistaken for a
+	// file. Only the Rancher mount prefix and the explicit file:// prefix are
+	// treated as file paths.
+	t.Run("inline single line path-like script", func(t *testing.T) {
+		d := &Driver{CustomScript: "/bin/true"}
+		got, err := d.customScriptContents()
+		if err != nil {
+			t.Fatalf("customScriptContents: %v", err)
+		}
+		if string(got) != "/bin/true" {
+			t.Fatalf("customScriptContents = %q, want %q", got, "/bin/true")
+		}
+	})
+
+	t.Run("file prefix", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "customScript")
+		script := "#!/bin/bash\necho from-file\n"
+		if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		d := &Driver{CustomScript: "file://" + path}
+		got, err := d.customScriptContents()
+		if err != nil {
+			t.Fatalf("customScriptContents: %v", err)
+		}
+		if string(got) != script {
+			t.Fatalf("customScriptContents = %q, want %q", got, script)
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		d := &Driver{CustomScript: "file://" + filepath.Join(t.TempDir(), "missing")}
+		if _, err := d.customScriptContents(); err == nil {
+			t.Fatal("expected missing file to be rejected")
+		}
+	})
+
+	t.Run("Rancher machine-files path is read as a file", func(t *testing.T) {
+		d := &Driver{CustomScript: rancherMachineFilesPath + "/customScript"}
+		if _, err := d.customScriptContents(); err == nil {
+			t.Fatal("expected a missing Rancher machine-files script to be rejected instead of executed as inline text")
+		}
+	})
 }
 
 func TestCustomScriptCommand(t *testing.T) {

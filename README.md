@@ -475,6 +475,18 @@ passwordless sudo. Do not reboot inside the script: the SSH session drops and `C
 fails. The script is part of the Rancher machine config, so do not store secrets in it;
 use a secret/URL-based mechanism for confidential data.
 
+Rancher 2.12+ handles this field as a mounted file when the NodeDriver has the
+annotation from `deploy/nodedriver.yaml`:
+
+```yaml
+nodedriver.cattle.io/file-to-field-aliases: customScript:customScript
+```
+
+Rancher then writes the field to the per-machine files secret and passes
+`/path/to/machine/files/customScript` to the driver, which reads the file. Older Rancher
+releases ignore the annotation and pass the inline script. CLI users can pass an explicit
+file with `--fusioncompute-custom-script=file:///path/to/script`.
+
 Every flag also accepts an environment variable (see the table below).
 
 ---
