@@ -147,6 +147,8 @@ configured SSH user.
 6. Waits for sshd. In key-only mode it verifies an authenticated key handshake; in
    password mode it logs in once with the bootstrap password and installs the generated
    public key.
+7. Runs `--fusioncompute-custom-script`, when configured, over SSH before handing the host
+   to Rancher. Rancher then runs the normal RKE2/K3s node init script.
 
 ```mermaid
 sequenceDiagram
@@ -171,6 +173,9 @@ sequenceDiagram
     VRM-->>Driver: IP status ready
     Driver->>Guest: wait for sshd on 22
     Driver->>Guest: install SSH public key
+    opt custom script configured
+        Driver->>Guest: run custom script (SSH)
+    end
     Driver->>Rancher: host created
 
     Note over Rancher,Agent: Node init
@@ -375,6 +380,8 @@ The UI extension renders the machine pool in sections:
      password (stored on the node); no password field is shown.
   4. **Username and password**, reset on, no generate → the value entered is the *new*
      password FusionCompute resets on first boot.
+- **First-boot script** — optional `customScript` that runs over SSH after key
+  installation and before Rancher's RKE2/K3s node init script.
 - **Advanced** — the remaining driver settings via the generic `<Questions>` renderer.
 
 When a password reset is on, the SSH user is hidden: FusionCompute resets **root** and the
