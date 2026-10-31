@@ -65,3 +65,11 @@ sshKeyPath: ""
 
 # Description shown on the cloned VM. Empty falls back to the driver default.
 vmDescription: "Provisioned by docker-machine-driver-fusioncompute"
+
+# Optional first-boot script. It runs over SSH at the end of Create(), after
+# the driver installs its key and before Rancher's RKE2/K3s node init script.
+# It runs once per VM creation and does not replace the Rancher init script.
+# Plain text is the default; set customScriptBase64: true if the value is
+# base64-encoded. Do not put secrets in this field.
+customScript: ""
+customScriptBase64: false

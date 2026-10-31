@@ -51,6 +51,8 @@ const OVERRIDDEN_FIELDS = [
   'sshPassword',
   'sshPrivateKey',
   'sshUser',
+  'customScript',
+  'customScriptBase64',
 ];
 
 // Fields intentionally omitted from the form. SSH is always on port 22
@@ -331,6 +333,22 @@ export default {
       },
       set(v) {
         this.value.sshUser = v;
+      },
+    },
+    customScript: {
+      get() {
+        return this.value?.customScript;
+      },
+      set(v) {
+        this.value.customScript = v;
+      },
+    },
+    customScriptBase64: {
+      get() {
+        return !!this.value?.customScriptBase64;
+      },
+      set(v) {
+        this.value.customScriptBase64 = !!v;
       },
     },
 
@@ -811,6 +829,42 @@ export default {
         </div>
       </template>
     </template>
+
+    <div class="row mt-10">
+      <div class="col span-12">
+        <h3>First-boot script</h3>
+      </div>
+    </div>
+    <div class="row mt-10">
+      <div class="col span-12">
+        <LabeledInput
+          v-model:value="customScript"
+          type="multiline"
+          :mode="mode"
+          :label="'Custom shell script (optional)'"
+          :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
+          :disabled="disabled || busy"
+        />
+      </div>
+    </div>
+    <div class="row mt-5">
+      <div class="col span-12">
+        <Checkbox
+          v-model:value="customScriptBase64"
+          :mode="mode"
+          :label="'The script above is base64-encoded'"
+          :disabled="disabled || busy"
+        />
+      </div>
+    </div>
+    <div class="row mt-5">
+      <div class="col span-12">
+        <span class="text-muted">
+          Runs once per machine creation as root over SSH, before Rancher's RKE2/K3s node init script. It does not
+          replace that init script. Do not reboot the VM inside the script.
+        </span>
+      </div>
+    </div>
 
     <template v-if="fields">
       <div class="row mt-10">
