@@ -52,7 +52,6 @@ const OVERRIDDEN_FIELDS = [
   'sshPrivateKey',
   'sshUser',
   'customScript',
-  'customScriptBase64',
 ];
 
 // Fields intentionally omitted from the form. SSH is always on port 22
@@ -341,14 +340,6 @@ export default {
       },
       set(v) {
         this.value.customScript = v;
-      },
-    },
-    customScriptBase64: {
-      get() {
-        return !!this.value?.customScriptBase64;
-      },
-      set(v) {
-        this.value.customScriptBase64 = !!v;
       },
     },
 
@@ -843,16 +834,6 @@ export default {
           :mode="mode"
           :label="'Custom shell script (optional)'"
           :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
-          :disabled="disabled || busy"
-        />
-      </div>
-    </div>
-    <div class="row mt-5">
-      <div class="col span-12">
-        <Checkbox
-          v-model:value="customScriptBase64"
-          :mode="mode"
-          :label="'The script above is base64-encoded'"
           :disabled="disabled || busy"
         />
       </div>

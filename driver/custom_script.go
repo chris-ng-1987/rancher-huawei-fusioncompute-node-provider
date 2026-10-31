@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -23,36 +22,19 @@ const (
 	customScriptOutputLimit = 4 * 1024
 )
 
-// customScriptContents returns the shell script to run, decoding it when
-// --fusioncompute-custom-script-base64 is set. A blank script means "do
-// nothing".
+// customScriptContents returns the shell script to run. A blank script means
+// "do nothing".
 //
-// Plain text is the default because the driver writes the script to the
-// remote bash process over SSH stdin; no shell interpolation is involved, so
-// quotes, `$`, and newlines are preserved. The optional base64 flag exists
-// for API/CLI callers that cannot transport multiline values reliably. Base64
-// is only an encoding; it does not make the script secret.
-func (d *Driver) customScriptContents() ([]byte, error) {
+// The script is written to the remote bash process over SSH stdin, so no
+// shell interpolation is involved; quotes, `$`, and newlines are preserved.
+// The value is plain text, matching the Rancher UI textarea and the machine
+// config field. It is not a place for secrets; use a secret/URL-based
+// mechanism for confidential data.
+func (d *Driver) customScriptContents() []byte {
 	if strings.TrimSpace(d.CustomScript) == "" {
-		return nil, nil
+		return nil
 	}
-
-	if !d.CustomScriptBase64 {
-		return []byte(d.CustomScript), nil
-	}
-
-	// Accept line-wrapped base64 (common when a value has been copied from a
-	// terminal or a YAML block scalar); standard base64 decoders reject
-	// embedded whitespace.
-	encoded := strings.Join(strings.Fields(d.CustomScript), "")
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("fusioncompute: decode --fusioncompute-custom-script as base64: %w", err)
-	}
-	if len(decoded) == 0 {
-		return nil, nil
-	}
-	return decoded, nil
+	return []byte(d.CustomScript)
 }
 
 // customScriptCommand returns the remote command used to execute the script.
@@ -72,10 +54,7 @@ func (d *Driver) customScriptCommand() string {
 // its node init script. A non-zero exit fails Create so Rancher does not
 // attempt to join a partially configured node.
 func (d *Driver) runCustomScript() error {
-	script, err := d.customScriptContents()
-	if err != nil {
-		return err
-	}
+	script := d.customScriptContents()
 	if len(script) == 0 {
 		return nil
 	}

@@ -64,12 +64,7 @@ type Driver struct {
 	// after the SSH key is installed and before libmachine/Rancher runs its
 	// node init script (the RKE2/K3s system-agent installer). It runs once per
 	// VM creation and does not replace the Rancher init script.
-	//
-	// CustomScriptBase64 treats CustomScript as base64-encoded; this is useful
-	// for API/CLI callers that cannot reliably transport multiline values.
-	// Base64 is an encoding, not encryption; do not use it to protect secrets.
-	CustomScript       string `json:"-"` // not persisted in machine state; the flag is in the machine config
-	CustomScriptBase64 bool
+	CustomScript string `json:"-"` // not persisted in machine state; the flag is in the machine config
 
 	// SSH auth is **key-based only** because libmachine v0.16.x
 	// hard-codes `-o PasswordAuthentication=no` and the
@@ -290,11 +285,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "Shell script to run over SSH after the VM is reachable and before Rancher's RKE2/K3s node init script. Runs once per VM creation; it does not replace the node init script",
 			EnvVar: "FUSIONCOMPUTE_CUSTOM_SCRIPT",
 		},
-		mcnflag.BoolFlag{
-			Name:   "fusioncompute-custom-script-base64",
-			Usage:  "Treat --fusioncompute-custom-script as base64-encoded (useful for API/CLI transport; not encryption)",
-			EnvVar: "FUSIONCOMPUTE_CUSTOM_SCRIPT_BASE64",
-		},
 	}
 }
 
@@ -329,7 +319,6 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.GeneratePassword = opts.Bool("fusioncompute-generate-password")
 	d.KeepFailedVM = opts.Bool("fusioncompute-keep-failed-vm")
 	d.CustomScript = opts.String("fusioncompute-custom-script")
-	d.CustomScriptBase64 = opts.Bool("fusioncompute-custom-script-base64")
 	d.SetSwarmConfigFromFlags(opts)
 
 	// Also surface SSH port/user/key through the BaseDriver so
@@ -418,10 +407,6 @@ func (d *Driver) validate() error {
 		if d.SSHPassword != "" || d.SetVMPassword || d.GeneratePassword {
 			return fmt.Errorf("fusioncompute driver: --fusioncompute-ssh-private-key cannot be combined with --fusioncompute-ssh-password, --fusioncompute-set-vm-password, or --fusioncompute-generate-password")
 		}
-	}
-
-	if _, err := d.customScriptContents(); err != nil {
-		return err
 	}
 	return nil
 }

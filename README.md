@@ -461,16 +461,12 @@ growpart /dev/sda 3 || true
 btrfs filesystem resize max /.snapshots || true
 ```
 
-The script is written to `bash -s` on stdin, so quotes, `$`, and newlines are preserved;
-it runs as root. With a non-root `--fusioncompute-ssh-user`, the driver runs
-`sudo -n bash -s`, which requires passwordless sudo. Do not reboot inside the script: the
-SSH session drops and `Create` fails.
-
-Plain text is the default. If a caller cannot transport multiline values reliably, set
-`--fusioncompute-custom-script-base64` and pass a base64-encoded script; line-wrapped
-base64 is accepted. Base64 is only an encoding, not encryption. The script is part of the
-Rancher machine config, so do not store secrets in it; use a secret/URL-based mechanism
-for confidential data.
+The script is plain text. The value is written to `bash -s` on stdin, so quotes,
+`$`, and newlines are preserved; it runs as root. With a non-root
+`--fusioncompute-ssh-user`, the driver runs `sudo -n bash -s`, which requires
+passwordless sudo. Do not reboot inside the script: the SSH session drops and `Create`
+fails. The script is part of the Rancher machine config, so do not store secrets in it;
+use a secret/URL-based mechanism for confidential data.
 
 Every flag also accepts an environment variable (see the table below).
 
@@ -502,7 +498,6 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-generate-password`   | `FUSIONCOMPUTE_GENERATE_PASSWORD`| no    | Generate a random guest password, reset it on clone, and store it at `<machine>/fusioncompute-generated-password` (overrides `--fusioncompute-ssh-password`) |
 | `--fusioncompute-keep-failed-vm`      | `FUSIONCOMPUTE_KEEP_FAILED_VM`| no       | Keep the cloned VM if provisioning fails after the clone (default: delete it to avoid orphans) |
 | `--fusioncompute-custom-script`       | `FUSIONCOMPUTE_CUSTOM_SCRIPT` | no       | Shell script to run over SSH at the end of `Create()`, before Rancher's RKE2/K3s init script. Runs once per VM |
-| `--fusioncompute-custom-script-base64`| `FUSIONCOMPUTE_CUSTOM_SCRIPT_BASE64`| no | Treat `--fusioncompute-custom-script` as base64-encoded (encoding, not encryption) |
 
 > The SSH port is fixed at `22` — FusionCompute templates provisioned by this driver always
 > run sshd on 22, so there is no flag to override it.

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -11,77 +10,18 @@ import (
 )
 
 func TestCustomScriptContents(t *testing.T) {
-	tests := map[string]struct {
-		script string
-		base64 bool
-		want   string
-	}{
-		"empty": {
-			script: "",
-			want:   "",
-		},
-		"plain": {
-			script: "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
-			want:   "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
-		},
-		"base64": {
-			script: base64.StdEncoding.EncodeToString([]byte("growpart /dev/sda 3\nexit 0\n")),
-			base64: true,
-			want:   "growpart /dev/sda 3\nexit 0\n",
-		},
-		"wrapped base64": {
-			script: "Z3Jvd3BhcnQgL2Rldi9zZGEgMwpleGl0\nIDAK\n",
-			base64: true,
-			want:   "growpart /dev/sda 3\nexit 0\n",
-		},
+	tests := map[string]string{
+		"empty": "",
+		"plain": "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
 	}
 
-	for name, tt := range tests {
+	for name, script := range tests {
 		t.Run(name, func(t *testing.T) {
-			d := &Driver{CustomScript: tt.script, CustomScriptBase64: tt.base64}
-			got, err := d.customScriptContents()
-			if err != nil {
-				t.Fatalf("customScriptContents: %v", err)
-			}
-			if string(got) != tt.want {
-				t.Fatalf("customScriptContents = %q, want %q", got, tt.want)
+			d := &Driver{CustomScript: script}
+			if got := string(d.customScriptContents()); got != script {
+				t.Fatalf("customScriptContents = %q, want %q", got, script)
 			}
 		})
-	}
-
-	t.Run("invalid base64", func(t *testing.T) {
-		d := &Driver{CustomScript: "not-base64!", CustomScriptBase64: true}
-		if _, err := d.customScriptContents(); err == nil {
-			t.Fatal("expected invalid base64 to be rejected")
-		}
-	})
-}
-
-func TestValidateCustomScriptBase64(t *testing.T) {
-	base := func() *Driver {
-		return &Driver{
-			DCSHostname:  "dcs.example.com",
-			DCSUsername:  "admin",
-			DCSPassword:  "secret",
-			DCSSiteURI:   "/service/sites/1",
-			TemplateID:   "tpl",
-			PortGroupURN: "urn:pg",
-			DatastoreURN: "urn:ds",
-		}
-	}
-
-	valid := base()
-	valid.CustomScript = base64.StdEncoding.EncodeToString([]byte("echo ok\n"))
-	valid.CustomScriptBase64 = true
-	if err := valid.validate(); err != nil {
-		t.Fatalf("valid base64 script should validate, got %v", err)
-	}
-
-	invalid := base()
-	invalid.CustomScript = "not base64!"
-	invalid.CustomScriptBase64 = true
-	if err := invalid.validate(); err == nil {
-		t.Fatal("invalid base64 script should be rejected by validate")
 	}
 }
 
@@ -97,50 +37,35 @@ func TestCustomScriptCommand(t *testing.T) {
 	}
 }
 
-func TestCustomScriptFlagDefaults(t *testing.T) {
+func TestCustomScriptFlagDefault(t *testing.T) {
 	d := NewDriver("n", "/tmp")
-	var sawScript, sawBase64 bool
+	var found bool
 
 	for _, flag := range d.GetCreateFlags() {
-		switch f := flag.(type) {
-		case mcnflag.StringFlag:
-			if f.Name == "fusioncompute-custom-script" {
-				sawScript = true
-				if f.Default() != "" {
-					t.Errorf("fusioncompute-custom-script default = %#v, want empty", f.Default())
-				}
-			}
-		case mcnflag.BoolFlag:
-			if f.Name == "fusioncompute-custom-script-base64" {
-				sawBase64 = true
-				if got, ok := f.Default().(bool); !ok || got {
-					t.Errorf("fusioncompute-custom-script-base64 default = %#v, want false", f.Default())
-				}
+		if f, ok := flag.(mcnflag.StringFlag); ok && f.Name == "fusioncompute-custom-script" {
+			found = true
+			if f.Default() != "" {
+				t.Errorf("fusioncompute-custom-script default = %#v, want empty", f.Default())
 			}
 		}
 	}
-	if !sawScript {
+	if !found {
 		t.Fatal("fusioncompute-custom-script flag not found")
-	}
-	if !sawBase64 {
-		t.Fatal("fusioncompute-custom-script-base64 flag not found")
 	}
 }
 
 func TestSetConfigFromFlagsCustomScript(t *testing.T) {
-	plain := "#!/bin/bash\necho hello\n"
-	script := base64.StdEncoding.EncodeToString([]byte(plain))
+	script := "#!/bin/bash\necho hello\n"
 	d := NewDriver("n", "/tmp")
 	opts := fakeDriverOptions{
-		"fusioncompute-dcs-hostname":         "dcs.example.com",
-		"fusioncompute-dcs-username":         "admin",
-		"fusioncompute-dcs-password":         "secret",
-		"fusioncompute-dcs-site-uri":         "/service/sites/1",
-		"fusioncompute-template-id":          "tpl",
-		"fusioncompute-port-group-urn":       "urn:pg",
-		"fusioncompute-datastore-urn":        "urn:ds",
-		"fusioncompute-custom-script":        script,
-		"fusioncompute-custom-script-base64": true,
+		"fusioncompute-dcs-hostname":   "dcs.example.com",
+		"fusioncompute-dcs-username":   "admin",
+		"fusioncompute-dcs-password":   "secret",
+		"fusioncompute-dcs-site-uri":   "/service/sites/1",
+		"fusioncompute-template-id":    "tpl",
+		"fusioncompute-port-group-urn": "urn:pg",
+		"fusioncompute-datastore-urn":  "urn:ds",
+		"fusioncompute-custom-script":  script,
 	}
 
 	if err := d.SetConfigFromFlags(opts); err != nil {
@@ -148,9 +73,6 @@ func TestSetConfigFromFlagsCustomScript(t *testing.T) {
 	}
 	if d.CustomScript != script {
 		t.Fatalf("CustomScript = %q, want %q", d.CustomScript, script)
-	}
-	if !d.CustomScriptBase64 {
-		t.Fatal("CustomScriptBase64 = false, want true")
 	}
 }
 
@@ -174,15 +96,5 @@ func TestRunCustomScriptSkipsEmpty(t *testing.T) {
 	d := NewDriver("n", "/tmp")
 	if err := d.runCustomScript(); err != nil {
 		t.Fatalf("empty custom script must be a no-op, got %v", err)
-	}
-}
-
-func TestRunCustomScriptRejectsInvalidBase64(t *testing.T) {
-	d := NewDriver("n", "/tmp")
-	d.CustomScript = "not base64!"
-	d.CustomScriptBase64 = true
-
-	if err := d.runCustomScript(); err == nil {
-		t.Fatal("invalid base64 must fail before attempting SSH")
 	}
 }
