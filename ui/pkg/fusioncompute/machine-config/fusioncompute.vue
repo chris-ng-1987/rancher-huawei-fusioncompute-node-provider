@@ -831,6 +831,9 @@ export default {
         <!-- Rancher's multiline input auto-grows from a single row; set a
              multi-line minimum so the script is visibly a textarea. These
              heights are forwarded to TextAreaAutoGrow. -->
+        <!-- The cluster form sets CruResource's prevent-enter-submit, which
+             cancels Enter for every descendant, including textareas. Stop
+             Enter here so the textarea keeps its normal newline behavior. -->
         <LabeledInput
           v-model:value="customScript"
           type="multiline"
@@ -840,6 +843,7 @@ export default {
           :label="'Custom shell script (optional)'"
           :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
           :disabled="disabled || busy"
+          @keydown.enter.stop
         />
       </div>
     </div>
