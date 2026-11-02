@@ -70,7 +70,7 @@ func (d *Driver) customScriptContents() ([]byte, error) {
 		return nil, err
 	}
 	if len(script) > maxCustomScriptBytes {
-		return nil, fmt.Errorf("fusioncompute: custom script is %d bytes, maximum is %d", len(script), maxCustomScriptBytes)
+		return nil, fmt.Errorf("fusioncompute: customScript is %d bytes, maximum is %d", len(script), maxCustomScriptBytes)
 	}
 	return script, nil
 }
@@ -78,17 +78,17 @@ func (d *Driver) customScriptContents() ([]byte, error) {
 func readCustomScriptFile(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("fusioncompute: stat custom script file %s: %w", path, err)
+		return nil, fmt.Errorf("fusioncompute: stat customScript file %s: %w", path, err)
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("fusioncompute: custom script file %s is not a regular file", path)
+		return nil, fmt.Errorf("fusioncompute: customScript file %s is not a regular file", path)
 	}
 	if info.Size() > maxCustomScriptBytes {
-		return nil, fmt.Errorf("fusioncompute: custom script file %s is %d bytes, maximum is %d", path, info.Size(), maxCustomScriptBytes)
+		return nil, fmt.Errorf("fusioncompute: customScript file %s is %d bytes, maximum is %d", path, info.Size(), maxCustomScriptBytes)
 	}
 	script, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("fusioncompute: read custom script file %s: %w", path, err)
+		return nil, fmt.Errorf("fusioncompute: read customScript file %s: %w", path, err)
 	}
 	return script, nil
 }
@@ -115,29 +115,30 @@ func (d *Driver) runCustomScript() error {
 		return err
 	}
 	if len(script) == 0 {
+		log.Infof("FusionCompute: no customScript configured; skipping optional first-boot script")
 		return nil
 	}
 
 	cfg, err := ssh.NewNativeConfig(d.GetSSHUsername(), &ssh.Auth{Keys: []string{d.GetSSHKeyPath()}})
 	if err != nil {
-		return fmt.Errorf("fusioncompute: build SSH config for custom script: %w", err)
+		return fmt.Errorf("fusioncompute: build SSH config for customScript: %w", err)
 	}
 	cfg.Timeout = 20 * time.Second
 
 	client, err := gossh.Dial("tcp", d.sshAddr(), &cfg)
 	if err != nil {
-		return fmt.Errorf("fusioncompute: connect for custom script at %s: %w", d.sshAddr(), err)
+		return fmt.Errorf("fusioncompute: connect for customScript at %s: %w", d.sshAddr(), err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("fusioncompute: open custom script session: %w", err)
+		return fmt.Errorf("fusioncompute: open customScript session: %w", err)
 	}
 	defer session.Close()
 
 	command := d.customScriptCommand()
-	log.Infof("FusionCompute: running custom script (%d bytes) as %q over SSH (%s)", len(script), d.GetSSHUsername(), command)
+	log.Infof("FusionCompute: running optional customScript first-boot script (%d bytes) as %q over SSH (%s)", len(script), d.GetSSHUsername(), command)
 
 	type result struct {
 		output []byte
@@ -153,17 +154,17 @@ func (d *Driver) runCustomScript() error {
 	select {
 	case res := <-done:
 		if res.err != nil {
-			return fmt.Errorf("fusioncompute: custom script failed: %w: %s", res.err, truncateScriptOutput(res.output))
+			return fmt.Errorf("fusioncompute: customScript failed: %w: %s", res.err, truncateScriptOutput(res.output))
 		}
 		if len(res.output) > 0 {
-			log.Debugf("FusionCompute: custom script output: %s", truncateScriptOutput(res.output))
+			log.Debugf("FusionCompute: customScript output: %s", truncateScriptOutput(res.output))
 		}
-		log.Infof("FusionCompute: custom script completed")
+		log.Infof("FusionCompute: customScript completed")
 		return nil
 	case <-time.After(customScriptTimeout):
 		_ = session.Close()
 		_ = client.Close()
-		return fmt.Errorf("fusioncompute: custom script timed out after %s", customScriptTimeout)
+		return fmt.Errorf("fusioncompute: customScript timed out after %s", customScriptTimeout)
 	}
 }
 

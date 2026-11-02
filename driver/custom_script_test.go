@@ -110,6 +110,18 @@ func TestCustomScriptFlagDefault(t *testing.T) {
 	}
 }
 
+// TestDoesNotAdvertiseUserdataFlag guards Rancher's RKE2/K3s provisioning
+// path. libmachine skips provision.WithCustomScript when a driver advertises a
+// userdata flag, assuming the custom install script was already injected into
+// the guest. This driver has no such flag, so Rancher's generated node init
+// script is still uploaded and run over SSH after Create().
+func TestDoesNotAdvertiseUserdataFlag(t *testing.T) {
+	d := NewDriver("n", "/tmp")
+	if flag := drivers.DriverUserdataFlag(d); flag != "" {
+		t.Fatalf("driver advertises userdata flag %q; libmachine would skip Rancher's RKE2/K3s init script", flag)
+	}
+}
+
 func TestSetConfigFromFlagsCustomScript(t *testing.T) {
 	script := "#!/bin/bash\necho hello\n"
 	d := NewDriver("n", "/tmp")
