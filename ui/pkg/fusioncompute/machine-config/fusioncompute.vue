@@ -828,9 +828,14 @@ export default {
     </div>
     <div class="row mt-10">
       <div class="col span-12">
+        <!-- Rancher's multiline input auto-grows from a single row; set a
+             multi-line minimum so the script is visibly a textarea. These
+             heights are forwarded to TextAreaAutoGrow. -->
         <LabeledInput
           v-model:value="customScript"
           type="multiline"
+          :min-height="160"
+          :max-height="480"
           :mode="mode"
           :label="'Custom shell script (optional)'"
           :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
