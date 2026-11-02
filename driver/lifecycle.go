@@ -255,7 +255,10 @@ func (d *Driver) Create() (err error) {
 	if err := d.waitForSSH(5*time.Minute, 5*time.Second); err != nil {
 		return err
 	}
-	return d.installAuthorizedKey(c)
+	if err := d.installAuthorizedKey(c); err != nil {
+		return err
+	}
+	return d.runCustomScript()
 }
 
 // ensureSSHKey materializes the key pair docker-machine/Rancher will use.

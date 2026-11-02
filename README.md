@@ -147,6 +147,8 @@ configured SSH user.
 6. Waits for sshd. In key-only mode it verifies an authenticated key handshake; in
    password mode it logs in once with the bootstrap password and installs the generated
    public key.
+7. Runs `--fusioncompute-custom-script`, when configured, over SSH before handing the host
+   to Rancher. Rancher then runs the normal RKE2/K3s node init script.
 
 ```mermaid
 sequenceDiagram
@@ -171,6 +173,9 @@ sequenceDiagram
     VRM-->>Driver: IP status ready
     Driver->>Guest: wait for sshd on 22
     Driver->>Guest: install SSH public key
+    opt custom script configured
+        Driver->>Guest: run custom script (SSH)
+    end
     Driver->>Rancher: host created
 
     Note over Rancher,Agent: Node init
@@ -375,6 +380,8 @@ The UI extension renders the machine pool in sections:
      password (stored on the node); no password field is shown.
   4. **Username and password**, reset on, no generate → the value entered is the *new*
      password FusionCompute resets on first boot.
+- **First-boot script** — optional `customScript` that runs over SSH after key
+  installation and before Rancher's RKE2/K3s node init script.
 - **Advanced** — the remaining driver settings via the generic `<Questions>` renderer.
 
 When a password reset is on, the SSH user is hidden: FusionCompute resets **root** and the
@@ -443,6 +450,43 @@ If `Create` fails after the clone (e.g. the key install times out), the driver d
 VM so a failed create does not leave an orphan in FusionCompute. Set
 `--fusioncompute-keep-failed-vm=true` to keep it for debugging.
 
+### Custom first-boot script
+
+`--fusioncompute-custom-script` runs a shell script over SSH at the end of `Create()`,
+after the driver has installed its SSH key and **before** libmachine/Rancher runs the node
+init script. It runs once per VM creation and does not replace Rancher's RKE2/K3s
+system-agent init script.
+
+Use it for pre-RKE2 host preparation such as expanding the system disk, setting the
+hostname, or installing CA certificates:
+
+```bash
+#!/bin/bash
+set -e
+sgdisk -e /dev/sda >/dev/null 2>&1 || true
+growpart /dev/sda 3 || true
+btrfs filesystem resize max /.snapshots || true
+```
+
+The script is plain text. The value is written to `bash -s` on stdin, so quotes,
+`$`, and newlines are preserved; it runs as root. With a non-root
+`--fusioncompute-ssh-user`, the driver runs `sudo -n bash -s`, which requires
+passwordless sudo. Do not reboot inside the script: the SSH session drops and `Create`
+fails. The script is part of the Rancher machine config, so do not store secrets in it;
+use a secret/URL-based mechanism for confidential data.
+
+Rancher 2.12+ handles this field as a mounted file when the NodeDriver has the
+annotation from `deploy/nodedriver.yaml`:
+
+```yaml
+nodedriver.cattle.io/file-to-field-aliases: customScript:customScript
+```
+
+Rancher then writes the field to the per-machine files secret and passes
+`/path/to/machine/files/customScript` to the driver, which reads the file. Older Rancher
+releases ignore the annotation and pass the inline script. CLI users can pass an explicit
+file with `--fusioncompute-custom-script=file:///path/to/script`.
+
 Every flag also accepts an environment variable (see the table below).
 
 ---
@@ -472,6 +516,7 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-set-vm-password`     | `FUSIONCOMPUTE_SET_VM_PASSWORD`| no      | Send `isUpdateVmPassword=true` so FC applies the password on first boot |
 | `--fusioncompute-generate-password`   | `FUSIONCOMPUTE_GENERATE_PASSWORD`| no    | Generate a random guest password, reset it on clone, and store it at `<machine>/fusioncompute-generated-password` (overrides `--fusioncompute-ssh-password`) |
 | `--fusioncompute-keep-failed-vm`      | `FUSIONCOMPUTE_KEEP_FAILED_VM`| no       | Keep the cloned VM if provisioning fails after the clone (default: delete it to avoid orphans) |
+| `--fusioncompute-custom-script`       | `FUSIONCOMPUTE_CUSTOM_SCRIPT` | no       | Shell script to run over SSH at the end of `Create()`, before Rancher's RKE2/K3s init script. Runs once per VM |
 
 > The SSH port is fixed at `22` — FusionCompute templates provisioned by this driver always
 > run sshd on 22, so there is no flag to override it.

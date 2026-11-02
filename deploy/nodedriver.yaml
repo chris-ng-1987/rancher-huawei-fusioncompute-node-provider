@@ -21,6 +21,11 @@ metadata:
     optionalCredentialFields: dcsPort,skipTlsVerify
     passwordFields: dcsPassword,sshPassword,sshPrivateKey
     defaults: dcsPort:7443,cpu:2,memoryMb:4096,diskGb:250,sshUser:root
+    # Rancher 2.12+: pass customScript as a mounted file/secret instead of a
+    # command-line argument. The driver then receives
+    # /path/to/machine/files/customScript and reads it. Older Rancher releases
+    # ignore this annotation and pass the inline script value.
+    nodedriver.cattle.io/file-to-field-aliases: customScript:customScript
 spec:
   displayName: FusionCompute
   active: true
