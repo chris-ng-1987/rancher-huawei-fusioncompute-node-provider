@@ -3,10 +3,15 @@ package main
 import (
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/rancher/machine/libmachine/drivers"
@@ -757,6 +762,57 @@ func TestUnmarshalJSON(t *testing.T) {
 	if d.SkipTLSVerify {
 		t.Fatal("legacy configs without skipTlsVerify must verify by default")
 	}
+	if !d.legacySkipTLSVerify {
+		t.Fatal("a config without skipTlsVerify must be flagged as legacy")
+	}
+}
+
+func TestUnmarshalJSONTLSConfigPresence(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		skip   bool
+		legacy bool
+	}{
+		{
+			name:   "legacy config without the key",
+			raw:    `{"DCSHostname":"dcs.example.com","MachineName":"n"}`,
+			legacy: true,
+		},
+		{
+			name: "current config with verification enabled",
+			raw:  `{"DCSHostname":"dcs.example.com","SkipTLSVerify":false,"MachineName":"n"}`,
+		},
+		{
+			name: "current config with skip enabled",
+			raw:  `{"DCSHostname":"dcs.example.com","SkipTLSVerify":true,"MachineName":"n"}`,
+			skip: true,
+		},
+		{
+			name: "camelCase key is also recognized",
+			raw:  `{"DCSHostname":"dcs.example.com","skipTlsVerify":true,"MachineName":"n"}`,
+			skip: true,
+		},
+		{
+			name: "partial payload without a VRM host",
+			raw:  `{"MachineName":"n","StorePath":"/tmp"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := NewDriver("n", "/tmp")
+			if err := json.Unmarshal([]byte(tt.raw), d); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if d.SkipTLSVerify != tt.skip {
+				t.Fatalf("SkipTLSVerify = %v, want %v", d.SkipTLSVerify, tt.skip)
+			}
+			if d.legacySkipTLSVerify != tt.legacy {
+				t.Fatalf("legacySkipTLSVerify = %v, want %v", d.legacySkipTLSVerify, tt.legacy)
+			}
+		})
+	}
 }
 
 type fakeDriverOptions map[string]interface{}
@@ -825,6 +881,28 @@ func TestSetConfigFromFlagsSkipTLSVerify(t *testing.T) {
 		}
 		if !d.SkipTLSVerify {
 			t.Fatal("fusioncompute-skip-tls-verify=true was not applied")
+		}
+	})
+
+	t.Run("create clears the legacy removal fallback", func(t *testing.T) {
+		d := NewDriver("n", "/tmp")
+		// A driver can be loaded from legacy state before flags are applied;
+		// Create must not inherit the removal-only fallback.
+		if err := json.Unmarshal([]byte(`{"DCSHostname":"old.example.com","MachineName":"n"}`), d); err != nil {
+			t.Fatalf("unmarshal legacy config: %v", err)
+		}
+		if !d.legacySkipTLSVerify {
+			t.Fatal("legacy config should be flagged before flags are applied")
+		}
+
+		if err := d.SetConfigFromFlags(base()); err != nil {
+			t.Fatalf("SetConfigFromFlags: %v", err)
+		}
+		if d.legacySkipTLSVerify {
+			t.Fatal("SetConfigFromFlags must clear the legacy removal fallback")
+		}
+		if d.SkipTLSVerify {
+			t.Fatal("verification must be enabled when skipTlsVerify is not set")
 		}
 	})
 }
@@ -926,6 +1004,142 @@ func TestNewClientTLSVerification(t *testing.T) {
 	tr = c.hc.Transport.(*http.Transport)
 	if !tr.TLSClientConfig.InsecureSkipVerify {
 		t.Fatal("skipTlsVerify=true must skip certificate verification")
+	}
+}
+
+const (
+	testSiteURI = "/service/sites/1"
+	testVMURI   = testSiteURI + "/vms/i-00000001"
+	testTaskURI = "/service/tasks/1"
+)
+
+// fcTLSFixture serves the Remove() calls (session auth, forceStop, task poll,
+// delete) over a self-signed TLS certificate, like a factory VRM.
+type fcTLSFixture struct {
+	server  *httptest.Server
+	deleted atomic.Bool
+}
+
+func newFCTLSFixture(t *testing.T) *fcTLSFixture {
+	t.Helper()
+	f := &fcTLSFixture{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/service/session", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Auth-Token", "test-token")
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc(testVMURI+"/action/forceStop", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"taskUri":%q}`, testTaskURI)
+	})
+	mux.HandleFunc(testTaskURI, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"success","progress":100}`)
+	})
+	mux.HandleFunc(testVMURI, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
+		f.deleted.Store(true)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	f.server = httptest.NewTLSServer(mux)
+	t.Cleanup(f.server.Close)
+	return f
+}
+
+func (f *fcTLSFixture) hostPort(t *testing.T) (string, int) {
+	t.Helper()
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(f.server.URL, "https://"))
+	if err != nil {
+		t.Fatalf("split fixture URL %q: %v", f.server.URL, err)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		t.Fatalf("parse fixture port %q: %v", port, err)
+	}
+	return host, n
+}
+
+func (f *fcTLSFixture) driver(t *testing.T, skipTLSVerify bool) *Driver {
+	t.Helper()
+	host, port := f.hostPort(t)
+	d := NewDriver("test-machine", t.TempDir())
+	d.DCSHostname = host
+	d.DCSPort = port
+	d.DCSUsername = "admin"
+	d.DCSPassword = "secret"
+	d.DCSSiteURI = testSiteURI
+	d.VMMoRef = testVMURI
+	d.SkipTLSVerify = skipTLSVerify
+	return d
+}
+
+// TestRemoveHonorsSkipTLSVerify exercises the complete Remove() path against a
+// self-signed VRM: skipTlsVerify=true must delete the machine and the default
+// must reject the certificate before any API call succeeds.
+func TestRemoveHonorsSkipTLSVerify(t *testing.T) {
+	t.Run("skip enabled deletes over self-signed TLS", func(t *testing.T) {
+		f := newFCTLSFixture(t)
+		d := f.driver(t, true)
+
+		if err := d.Remove(); err != nil {
+			t.Fatalf("Remove with skipTlsVerify=true: %v", err)
+		}
+		if !f.deleted.Load() {
+			t.Fatal("VM was not deleted")
+		}
+		if d.VMMoRef != "" {
+			t.Fatalf("VMMoRef = %q after remove, want empty", d.VMMoRef)
+		}
+	})
+
+	t.Run("verification rejects self-signed TLS", func(t *testing.T) {
+		f := newFCTLSFixture(t)
+		d := f.driver(t, false)
+
+		err := d.Remove()
+		if err == nil {
+			t.Fatal("Remove succeeded against a self-signed certificate with verification enabled")
+		}
+		if !strings.Contains(err.Error(), "certificate") {
+			t.Fatalf("Remove error = %v, want a certificate verification failure", err)
+		}
+		if f.deleted.Load() {
+			t.Fatal("VM must not be deleted when verification fails")
+		}
+	})
+}
+
+// TestRemoveLegacyConfigSkipsTLSVerification covers machines created by
+// v0.2.0-beta.4 or earlier: their state has no skipTlsVerify value, so Remove
+// must keep the skip-verify behavior those machines were provisioned with.
+func TestRemoveLegacyConfigSkipsTLSVerification(t *testing.T) {
+	f := newFCTLSFixture(t)
+	host, port := f.hostPort(t)
+
+	raw := fmt.Sprintf(
+		`{"MachineName":"test-machine","StorePath":%q,"DCSHostname":%q,"DCSPort":%d,"DCSUsername":"admin","DCSPassword":"secret","DCSSiteURI":%q,"VMMoRef":%q}`,
+		t.TempDir(), host, port, testSiteURI, testVMURI,
+	)
+
+	d := NewDriver("test-machine", t.TempDir())
+	if err := json.Unmarshal([]byte(raw), d); err != nil {
+		t.Fatalf("unmarshal legacy config: %v", err)
+	}
+	if d.SkipTLSVerify {
+		t.Fatal("the persisted field must stay false; the fallback is removal-only")
+	}
+	if !d.legacySkipTLSVerify {
+		t.Fatal("legacy config was not detected")
+	}
+
+	if err := d.Remove(); err != nil {
+		t.Fatalf("Remove with a legacy config: %v", err)
+	}
+	if !f.deleted.Load() {
+		t.Fatal("VM from a legacy config was not deleted")
 	}
 }
 

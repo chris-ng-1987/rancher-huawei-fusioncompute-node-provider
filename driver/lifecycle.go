@@ -592,7 +592,17 @@ func pollURI(t *Task) string {
 
 // Remove stops (if running) and deletes the VM.
 func (d *Driver) Remove() error {
-	c, err := d.newClient()
+	// Machines created by v0.2.0-beta.4 or earlier were provisioned with
+	// certificate verification disabled and their saved config has no
+	// skipTlsVerify value. Keep that trust model for removal so upgrading
+	// the driver does not make old machines impossible to delete; new
+	// machines persist the effective setting and are unaffected.
+	skipTLSVerify := d.SkipTLSVerify
+	if d.legacySkipTLSVerify && !skipTLSVerify {
+		skipTLSVerify = true
+		log.Warnf("FusionCompute: machine %s was created before skipTlsVerify was persisted; skipping VRM TLS verification for removal, matching the driver that provisioned it", d.MachineName)
+	}
+	c, err := d.newClientWithSkipTLSVerify(skipTLSVerify)
 	if err != nil {
 		return err
 	}
