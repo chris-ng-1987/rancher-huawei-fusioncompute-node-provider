@@ -18,12 +18,12 @@ shipped as a monorepo with two artifacts that are built and released together:
 
 ---
 
-## TL;DR — install the v0.2.0-beta.7 pre-release
+## TL;DR — install the v0.2.0-beta.8 pre-release
 
-The beta release ([v0.2.0-beta.7](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.2.0-beta.7))
-adds an optional first-boot custom script (inline or file-backed) and requires an explicit
-FusionCompute site URI instead of auto-discovering it. It publishes the linux/amd64 driver
-binary and the UI bundle. The manifests in
+The beta release ([v0.2.0-beta.8](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.2.0-beta.8))
+makes the optional first-boot custom script a multi-line textarea and keeps machines
+created by `v0.2.0-beta.4` or earlier removable when TLS certificate verification is
+enabled. It publishes the linux/amd64 driver binary and the UI bundle. The manifests in
 `deploy/` already point at those artifacts — no build is needed. This is a pre-release;
 the stable [v0.1.0](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.1.0)
 remains available. Prerequisites: Rancher 2.15+, a template that meets the
@@ -46,7 +46,7 @@ kubectl -n cattle-ui-plugin-system get uiplugin fusioncompute -w
 Then create a **FusionCompute** cloud credential (**Cluster Management → Cloud
 Credentials**) and add a node pool with the custom machine-pool form. On arm64, change
 `spec.url` in `nodedriver.yaml` to the `linux_arm64` asset and replace `spec.checksum`
-with its sha256 from [`checksums.txt`](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.7/checksums.txt).
+with its sha256 from [`checksums.txt`](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.8/checksums.txt).
 See [Deploy on Rancher](#deploy-on-rancher) for the full details.
 
 ---
@@ -274,7 +274,7 @@ Apply the manifests in `deploy/` against the cluster that hosts Rancher
 - `proxyendpoint.yaml` — the allow-list for the live dropdowns (see
   [Live dropdowns](#3-live-dropdowns)).
 
-The checked-in manifests already point at the v0.2.0-beta.7 pre-release artifacts. If you
+The checked-in manifests already point at the v0.2.0-beta.8 pre-release artifacts. If you
 build and publish your own, update:
 
 - `nodedriver.yaml` → `spec.url` (the binary; use the matching OS/arch release asset).
