@@ -244,8 +244,16 @@ type NICSpecification struct {
 // verification is enabled by default; skipTlsVerify is an explicit opt-out
 // for self-signed VRM certificates.
 func (d *Driver) newClient() (*fcClient, error) {
+	return d.newClientWithSkipTLSVerify(d.SkipTLSVerify)
+}
+
+// newClientWithSkipTLSVerify is newClient with an explicit verification
+// override. Remove uses it for machines whose persisted config predates
+// skipTlsVerify, so cleanup keeps working for machines provisioned by a
+// driver that always skipped verification.
+func (d *Driver) newClientWithSkipTLSVerify(skipTLSVerify bool) (*fcClient, error) {
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: d.SkipTLSVerify},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLSVerify},
 	}
 	return &fcClient{
 		hostname: d.DCSHostname,

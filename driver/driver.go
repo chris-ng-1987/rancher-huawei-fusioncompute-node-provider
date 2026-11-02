@@ -31,6 +31,14 @@ type Driver struct {
 	DCSSiteURI    string // required site URI, e.g. "/service/sites/1"
 	SkipTLSVerify bool   // skip VRM certificate verification; only for self-signed certificates
 
+	// legacySkipTLSVerify marks machine state saved before skipTlsVerify
+	// existed (v0.2.0-beta.4 and earlier). Those driver versions always
+	// disabled certificate verification, so Remove keeps that behavior for
+	// these machines; otherwise upgrading the driver would strand them
+	// behind an x509 error. It is derived from the persisted JSON and is
+	// never written back to the machine config.
+	legacySkipTLSVerify bool
+
 	// --- Provisioning inputs ---
 	TemplateID    string // template (or VM) ID to clone from, e.g. "i-000001BC"
 	CPUCount      int    // num CPUs
@@ -297,6 +305,9 @@ func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
 	d.DCSPassword = opts.String("fusioncompute-dcs-password")
 	d.DCSSiteURI = normalizeSiteURI(opts.String("fusioncompute-dcs-site-uri"))
 	d.SkipTLSVerify = opts.Bool("fusioncompute-skip-tls-verify")
+	// A new machine config always carries the effective setting, so the
+	// legacy removal fallback must not leak into Create.
+	d.legacySkipTLSVerify = false
 
 	d.TemplateID = opts.String("fusioncompute-template-id")
 	d.CPUCount = opts.Int("fusioncompute-cpu")
@@ -359,6 +370,25 @@ func (d *Driver) UnmarshalJSON(data []byte) error {
 	// SSH port is fixed: ignore any older saved config that carried a
 	// different value.
 	d.SSHPort = DefaultSSHPort
+
+	// A FusionCompute machine config saved by v0.2.0-beta.4 or earlier has
+	// no skipTlsVerify key. Reverse-engineer that fact from the raw JSON:
+	// json.Unmarshal into the bool field cannot distinguish "absent" from
+	// "false". Only a config that still identifies its VRM host qualifies;
+	// this keeps the fallback from applying to partial payloads.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("error unmarshalling fusioncompute driver config: %w", err)
+	}
+	_, hasSkip := fields["SkipTLSVerify"]
+	if !hasSkip {
+		_, hasSkip = fields["skipTlsVerify"]
+	}
+	_, hasHost := fields["DCSHostname"]
+	if !hasHost {
+		_, hasHost = fields["dcsHostname"]
+	}
+	d.legacySkipTLSVerify = hasHost && !hasSkip
 	return nil
 }
 

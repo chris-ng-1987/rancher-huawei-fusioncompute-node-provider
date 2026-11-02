@@ -320,6 +320,12 @@ Rancher. Enable it only for self-signed VRM certificates. This option controls t
 driver's provisioning API calls only; Rancher's meta proxy (used for the live dropdowns)
 always verifies the certificate.
 
+Machines created by `v0.2.0-beta.4` or earlier were provisioned with verification always
+disabled and their saved state has no `skipTlsVerify` value. When one of those machines is
+removed with a newer driver, `Remove` keeps that creation-time behavior (and logs a
+warning), so upgrading the node driver does not strand existing machines behind an x509
+error. Machines created by `v0.2.0-beta.5` and later always persist the effective setting.
+
 ### 3. Live dropdowns
 
 The Template, Datastore, Cluster, and Port Group pickers are searchable selects populated
