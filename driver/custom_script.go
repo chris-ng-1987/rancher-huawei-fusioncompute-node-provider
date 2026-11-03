@@ -26,6 +26,13 @@ const (
 	// here; see nodedriver.cattle.io/file-to-field-aliases.
 	rancherMachineFilesPath = "/path/to/machine/files"
 
+	// rancherMachineBootstrapPath is where Rancher's machine provision job
+	// mounts the generated node bootstrap script (the system-agent
+	// installer) for this machine; see
+	// pkg/controllers/capr/machineprovision/template.go in rancher/rancher.
+	// The driver runs in the same container, so the file is readable.
+	rancherMachineBootstrapPath = "/run/secrets/machine/value"
+
 	// customScriptFilePrefix lets CLI/API callers pass a script file path
 	// explicitly without depending on Rancher's mount path.
 	customScriptFilePrefix = "file://"
@@ -104,6 +111,56 @@ func (d *Driver) customScriptCommand() string {
 	return "sudo -n bash -s"
 }
 
+// rancherBootstrapMarkers identify Rancher's generated node bootstrap script
+// and the cluster registration command. Both install and start the Rancher
+// system agent (and, as a result, the RKE2/K3s node bootstrap), so putting
+// either in customScript runs the node bootstrap twice.
+var rancherBootstrapMarkers = []string{
+	"system-agent-install.sh",
+	"rancher-system-agent",
+	"get.rke2.io",
+	"get.k3s.io",
+	rancherMachineBootstrapPath,
+}
+
+// isRancherNodeBootstrap reports whether script is Rancher's node
+// bootstrap/registration script rather than user host preparation.
+//
+// Rancher runs its generated init script (--custom-install-script) over SSH
+// after Create() returns. Executing the same or an equivalent script from
+// customScript bootstraps the node twice: the first run initializes
+// /var/lib/rancher/rke2 (or /var/lib/rancher/k3s) with one token and the
+// second fails with "bootstrap data already found and encrypted with
+// different token". The registration-command form also registers the VM as an
+// unmanaged node, which Rancher records as an extra custom-<hash> Machine for
+// the same node and IP.
+func isRancherNodeBootstrap(script []byte) bool {
+	machineBootstrap, _ := os.ReadFile(rancherMachineBootstrapPath)
+	return isRancherNodeBootstrapContent(script, machineBootstrap)
+}
+
+func isRancherNodeBootstrapContent(script, machineBootstrap []byte) bool {
+	trimmed := bytes.TrimSpace(script)
+	if len(trimmed) == 0 {
+		return false
+	}
+
+	// A Rancher-managed machine already has the generated bootstrap script
+	// mounted in the same container. An exact match means customScript was
+	// copied from it (or points at it).
+	if len(machineBootstrap) > 0 && bytes.Equal(trimmed, bytes.TrimSpace(machineBootstrap)) {
+		return true
+	}
+
+	text := string(trimmed)
+	for _, marker := range rancherBootstrapMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // runCustomScript uploads the configured script to the guest over SSH stdin
 // and executes it as root (or with passwordless sudo). It runs at the end of
 // Create(), after installAuthorizedKey, and before libmachine/Rancher invokes
@@ -116,6 +173,10 @@ func (d *Driver) runCustomScript() error {
 	}
 	if len(script) == 0 {
 		log.Infof("FusionCompute: no customScript configured; skipping optional first-boot script")
+		return nil
+	}
+	if isRancherNodeBootstrap(script) {
+		log.Warnf("FusionCompute: customScript is Rancher's node init/registration script; skipping it. Rancher runs its own generated bootstrap script after Create(), so running it here would bootstrap the node twice (RKE2 fails with \"bootstrap data already found and encrypted with different token\") and create a duplicate custom-<hash> Machine. Remove the init/registration command from customScript; use it only for host preparation such as growing the disk or installing CA certificates.")
 		return nil
 	}
 

@@ -72,5 +72,12 @@ vmDescription: "Provisioned by docker-machine-driver-fusioncompute"
 # With Rancher 2.12+, the NodeDriver annotation
 # nodedriver.cattle.io/file-to-field-aliases passes this as
 # /path/to/machine/files/customScript; older Rancher passes the inline value.
+#
+# Do NOT put Rancher's node init or cluster registration command here. Rancher
+# runs its own generated bootstrap script after Create(); running it from this
+# field bootstraps the node twice and fails with "bootstrap data already found
+# and encrypted with different token". The driver detects and skips such
+# scripts, but keeping them out of the config is the supported setup.
+#
 # Do not put secrets in this field.
 customScript: ""

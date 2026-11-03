@@ -166,3 +166,60 @@ func TestRunCustomScriptSkipsEmpty(t *testing.T) {
 		t.Fatalf("empty custom script must be a no-op, got %v", err)
 	}
 }
+
+// TestIsRancherNodeBootstrapContent covers the guard that stops the driver
+// from running Rancher's node init/registration script before Rancher does.
+func TestIsRancherNodeBootstrapContent(t *testing.T) {
+	tests := map[string]struct {
+		script           string
+		machineBootstrap string
+		want             bool
+	}{
+		"empty": {
+			script: "",
+			want:   false,
+		},
+		"host preparation": {
+			script: "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
+			want:   false,
+		},
+		"system agent installer": {
+			script: "curl -fL https://rancher.example.com/system-agent-install.sh | sh -s - --server https://rancher.example.com --token abc",
+			want:   true,
+		},
+		"cluster registration command": {
+			script: "curl -fL https://rancher.example.com/system-agent-install.sh | sh -s - --token abc --ca-checksum def",
+			want:   true,
+		},
+		"rke2 installer": {
+			script: "curl -sfL https://get.rke2.io | INSTALL_RKE2_TYPE=server sh -",
+			want:   true,
+		},
+		"k3s installer": {
+			script: "curl -sfL https://get.k3s.io | sh -",
+			want:   true,
+		},
+		"reference to Rancher bootstrap mount": {
+			script: rancherMachineBootstrapPath,
+			want:   true,
+		},
+		"identical to mounted machine bootstrap": {
+			script:           "#!/bin/sh\ncurl -fL https://rancher.example.com/install.sh | sh -s - --token abc\n",
+			machineBootstrap: "#!/bin/sh\ncurl -fL https://rancher.example.com/install.sh | sh -s - --token abc",
+			want:             true,
+		},
+		"different from mounted machine bootstrap": {
+			script:           "#!/bin/bash\ngrowpart /dev/sda 3 || true\n",
+			machineBootstrap: "#!/bin/sh\ncurl -fL https://rancher.example.com/install.sh | sh -s - --token abc\n",
+			want:             false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := isRancherNodeBootstrapContent([]byte(tt.script), []byte(tt.machineBootstrap)); got != tt.want {
+				t.Fatalf("isRancherNodeBootstrapContent(%q) = %v, want %v", tt.script, got, tt.want)
+			}
+		})
+	}
+}
