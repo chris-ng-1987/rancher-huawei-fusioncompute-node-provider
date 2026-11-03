@@ -466,6 +466,17 @@ after the driver has installed its SSH key and **before** libmachine/Rancher run
 init script. It runs once per VM creation and does not replace Rancher's RKE2/K3s
 system-agent init script.
 
+**Do not put Rancher's node init or cluster registration command in `customScript`.**
+Rancher already runs its generated bootstrap script (`--custom-install-script`) over SSH
+after `Create()`. Running that script (or the cluster registration command) from
+`customScript` bootstraps the node twice: the first run initializes the RKE2/K3s
+datastore with one token, and Rancher's real bootstrap then fails with
+`bootstrap data already found and encrypted with different token`. With RKE2, the
+registration-command form also makes Rancher record an extra `custom-<hash>` Machine for
+the same node and IP, so the two machine records conflict. The driver detects Rancher's
+bootstrap/registration script and skips it with a warning, but the supported setup is to
+leave it out of the machine config entirely. Use this field only for host preparation.
+
 Use it for pre-RKE2 host preparation such as expanding the system disk, setting the
 hostname, or installing CA certificates:
 
@@ -516,6 +527,7 @@ The driver's own messages name the optional field explicitly:
 
 ```text
 FusionCompute: no customScript configured; skipping optional first-boot script
+FusionCompute: customScript is Rancher's node init/registration script; skipping it ...
 FusionCompute: running optional customScript first-boot script ...
 FusionCompute: customScript completed
 FusionCompute: driver Create() finished ...; handing back to docker-machine/Rancher (Rancher's node init runs outside this driver)
