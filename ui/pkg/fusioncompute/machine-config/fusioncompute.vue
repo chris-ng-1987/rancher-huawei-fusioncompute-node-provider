@@ -840,7 +840,7 @@ export default {
           :min-height="160"
           :max-height="480"
           :mode="mode"
-          :label="'Custom shell script (optional)'"
+          :label="'First-boot script (customScript, optional)'"
           :placeholder="'#!/bin/bash\ngrowpart /dev/sda 3 || true'"
           :disabled="disabled || busy"
           @keydown.enter.stop
@@ -850,8 +850,9 @@ export default {
     <div class="row mt-5">
       <div class="col span-12">
         <span class="text-muted">
-          Runs once per machine creation as root over SSH, before Rancher's RKE2/K3s node init script. It does not
-          replace that init script. Do not reboot the VM inside the script.
+          Optional first-boot script. Runs once per machine creation as root over SSH, before Rancher's RKE2/K3s
+          node init script. It is separate from and does not replace that init script. Do not reboot the VM inside
+          the script.
         </span>
       </div>
     </div>

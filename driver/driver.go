@@ -290,7 +290,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		},
 		mcnflag.StringFlag{
 			Name:   "fusioncompute-custom-script",
-			Usage:  "Shell script to run over SSH after the VM is reachable and before Rancher's RKE2/K3s node init script. Runs once per VM creation; it does not replace the node init script",
+			Usage:  "Optional user first-boot script (customScript) to run over SSH after the VM is reachable and before Rancher's RKE2/K3s node init script. Runs once per VM creation; it does not replace the node init script",
 			EnvVar: "FUSIONCOMPUTE_CUSTOM_SCRIPT",
 		},
 	}

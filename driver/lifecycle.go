@@ -251,14 +251,18 @@ func (d *Driver) Create() (err error) {
 		return err
 	}
 	d.IPAddr = ip
-	log.Infof("FusionCompute: VM %s provisioned at %s", d.VMMoRef, d.IPAddr)
+	log.Infof("FusionCompute: VM %s cloned; guest IP is %s", d.VMMoRef, d.IPAddr)
 	if err := d.waitForSSH(5*time.Minute, 5*time.Second); err != nil {
 		return err
 	}
 	if err := d.installAuthorizedKey(c); err != nil {
 		return err
 	}
-	return d.runCustomScript()
+	if err := d.runCustomScript(); err != nil {
+		return err
+	}
+	log.Infof("FusionCompute: driver Create() finished for %s; handing back to docker-machine/Rancher (Rancher's node init runs outside this driver)", d.VMName)
+	return nil
 }
 
 // ensureSSHKey materializes the key pair docker-machine/Rancher will use.
@@ -300,7 +304,7 @@ func (d *Driver) ensureSSHKey() error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
-	log.Infof("Generating SSH keypair at %s", path)
+	log.Infof("FusionCompute: generating SSH keypair at %s", path)
 	return ssh.GenerateSSHKey(path)
 }
 
@@ -734,7 +738,7 @@ const keyInstallTimeout = 10 * time.Minute
 
 func (d *Driver) installAuthorizedKey(c *fcClient) error {
 	if d.SSHPassword == "" {
-		log.Infof("No guest password set; template must already trust %s", d.publicSSHKeyPath())
+		log.Infof("FusionCompute: no bootstrap password set; skipping key install (template must already trust %s)", d.publicSSHKeyPath())
 		return nil
 	}
 	pub, err := os.ReadFile(d.publicSSHKeyPath())
@@ -786,7 +790,7 @@ func (d *Driver) installAuthorizedKey(c *fcClient) error {
 		if err != nil {
 			return fmt.Errorf("fusioncompute: install authorized_keys: %w", err)
 		}
-		log.Infof("Installed SSH public key for user %s", user)
+		log.Infof("FusionCompute: installed SSH public key for user %s", user)
 		return nil
 	}
 	return fmt.Errorf("fusioncompute: password SSH for key install failed for user %q at %s: %w (verify the guest password; if it is valid, ensure --fusioncompute-ssh-user matches the account FusionCompute resets, normally root)", user, d.sshAddr(), last)

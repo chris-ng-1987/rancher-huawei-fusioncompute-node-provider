@@ -174,8 +174,8 @@ sequenceDiagram
     VRM-->>Driver: IP status ready
     Driver->>Guest: wait for sshd on 22
     Driver->>Guest: install SSH public key
-    opt custom script configured
-        Driver->>Guest: run custom script (SSH)
+    opt customScript configured
+        Driver->>Guest: run customScript first-boot script (SSH)
     end
     Driver->>Rancher: host created
 
@@ -494,6 +494,35 @@ Rancher then writes the field to the per-machine files secret and passes
 releases ignore the annotation and pass the inline script. CLI users can pass an explicit
 file with `--fusioncompute-custom-script=file:///path/to/script`.
 
+### Reading the provisioning logs
+
+Rancher's `--custom-install-script` (the generated RKE2/K3s system-agent init script) is
+separate from this driver's optional `customScript`. In the `machine-provision` job log,
+the line
+
+```text
+Provisioning with custom install script via SSH, not installing Docker...
+```
+
+means Rancher is about to upload that init script to the guest as
+`/tmp/install_script.sh` and run it with `sudo sh`. "Not installing Docker" only means
+docker-machine skips its normal Docker Engine install; it does **not** mean the node init
+is skipped. After it, the guest should have `/tmp/install_script.sh` and a running
+`rancher-system-agent`.
+
+The driver's own messages name the optional field explicitly:
+
+```text
+FusionCompute: no customScript configured; skipping optional first-boot script
+FusionCompute: running optional customScript first-boot script ...
+FusionCompute: customScript completed
+FusionCompute: driver Create() finished ...; handing back to docker-machine/Rancher (Rancher's node init runs outside this driver)
+```
+
+The driver cannot log that Rancher's init script was uploaded or executed: that happens
+inside `rancher-machine` after `Create()` returns. Use the `machine-provision` job log and
+the guest-side artifacts above to confirm it.
+
 Every flag also accepts an environment variable (see the table below).
 
 ---
@@ -523,7 +552,7 @@ Every flag also accepts an environment variable (see the table below).
 | `--fusioncompute-set-vm-password`     | `FUSIONCOMPUTE_SET_VM_PASSWORD`| no      | Send `isUpdateVmPassword=true` so FC applies the password on first boot |
 | `--fusioncompute-generate-password`   | `FUSIONCOMPUTE_GENERATE_PASSWORD`| no    | Generate a random guest password, reset it on clone, and store it at `<machine>/fusioncompute-generated-password` (overrides `--fusioncompute-ssh-password`) |
 | `--fusioncompute-keep-failed-vm`      | `FUSIONCOMPUTE_KEEP_FAILED_VM`| no       | Keep the cloned VM if provisioning fails after the clone (default: delete it to avoid orphans) |
-| `--fusioncompute-custom-script`       | `FUSIONCOMPUTE_CUSTOM_SCRIPT` | no       | Shell script to run over SSH at the end of `Create()`, before Rancher's RKE2/K3s init script. Runs once per VM |
+| `--fusioncompute-custom-script`       | `FUSIONCOMPUTE_CUSTOM_SCRIPT` | no       | Optional user first-boot script (`customScript`) to run over SSH at the end of `Create()`, before Rancher's RKE2/K3s init script. Runs once per VM |
 
 > The SSH port is fixed at `22` — FusionCompute templates provisioned by this driver always
 > run sshd on 22, so there is no flag to override it.
