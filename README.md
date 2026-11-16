@@ -18,17 +18,18 @@ shipped as a monorepo with two artifacts that are built and released together:
 
 ---
 
-## TL;DR — install the v0.2.0-beta.10 pre-release
+## TL;DR — install v0.2.0
 
-The beta release ([v0.2.0-beta.10](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.2.0-beta.10))
-clarifies the provisioning logs so the driver's optional `customScript` first-boot script
-is distinguishable from Rancher's generated RKE2/K3s init script, documents how to
-confirm that init script ran, and adds a regression test that the driver does not
-advertise a userdata flag. It includes the textarea fix from v0.2.0-beta.9. It publishes
-the linux/amd64 driver binary and the UI bundle. The manifests in `deploy/` already point
-at those artifacts — no build is needed. This is a pre-release; the stable
-[v0.1.0](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.1.0)
-remains available. Prerequisites: Rancher 2.15+, a template that meets the
+The stable release ([v0.2.0](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.2.0))
+adds SSH private-key authentication, an optional first-boot `customScript`, a VM
+description field, and configurable TLS verification (certificates are verified by
+default); it also requires an explicit FusionCompute site URI. It fixes Enter handling in
+the custom-script textarea and keeps legacy machines removable when TLS verification is
+on. It publishes the linux/amd64 driver binary and the UI bundle. The manifests in
+`deploy/` already point at those artifacts — no build is needed. This is the first stable
+release since
+[v0.1.0](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/tag/v0.1.0),
+which remains available. Prerequisites: Rancher 2.15+, a template that meets the
 [VM template requirements](#vm-template-requirements), a DNS name for the VRM whose
 certificate Rancher trusts, and `kubectl` access to the cluster that hosts Rancher.
 
@@ -48,7 +49,7 @@ kubectl -n cattle-ui-plugin-system get uiplugin fusioncompute -w
 Then create a **FusionCompute** cloud credential (**Cluster Management → Cloud
 Credentials**) and add a node pool with the custom machine-pool form. On arm64, change
 `spec.url` in `nodedriver.yaml` to the `linux_arm64` asset and replace `spec.checksum`
-with its sha256 from [`checksums.txt`](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0-beta.10/checksums.txt).
+with its sha256 from [`checksums.txt`](https://github.com/chris-ng-1987/rancher-huawei-fusioncompute-node-provider/releases/download/v0.2.0/checksums.txt).
 See [Deploy on Rancher](#deploy-on-rancher) for the full details.
 
 ---
@@ -276,7 +277,7 @@ Apply the manifests in `deploy/` against the cluster that hosts Rancher
 - `proxyendpoint.yaml` — the allow-list for the live dropdowns (see
   [Live dropdowns](#3-live-dropdowns)).
 
-The checked-in manifests already point at the v0.2.0-beta.10 pre-release artifacts. If you
+The checked-in manifests already point at the v0.2.0 artifacts. If you
 build and publish your own, update:
 
 - `nodedriver.yaml` → `spec.url` (the binary; use the matching OS/arch release asset).
